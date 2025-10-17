@@ -808,8 +808,7 @@ class RobotSimulation {
         return serializedLayers;
     }
     serializeElements(elements) {
-        return {
-            // Сериализуем робота
+        const serialized = {
             robot: elements.robot ? {
                 x: parseFloat(elements.robot.style.left),
                 y: parseFloat(elements.robot.style.top),
@@ -819,13 +818,11 @@ class RobotSimulation {
                 warehouseStopTime: elements.robot.warehouseStopTime || 300
             } : null,
             
-            // Сериализуем склад
             warehouse: elements.warehouse ? {
                 x: parseFloat(elements.warehouse.style.left),
                 y: parseFloat(elements.warehouse.style.top)
             } : null,
             
-            // Сериализуем конвейеры
             conveyors: elements.conveyors.map(conv => ({
                 x: conv.x,
                 y: conv.y,
@@ -833,48 +830,55 @@ class RobotSimulation {
                 segmentNumber: conv.segmentNumber
             })),
             
-            // Сериализуем посты
             posts: elements.posts.map(post => ({
                 x: post.x,
                 y: post.y,
                 type: post.type || 'post',
                 conveyor: post.conveyor || 1,
-                number: post.number || 1
+                number: post.number || 1,
+                visited: post.visited || false
             })),
             
-            // Сериализуем узлы пути (без соединений)
             pathNodes: elements.pathNodes.map(node => ({
                 x: node.x,
-                y: node.y
+                y: node.y,
+                layerIndex: node.layerIndex // сохраняем индекс слоя
             })),
             
-            // Сериализуем линии пути
             pathLines: elements.pathLines.map(line => ({
                 startX: line.startNode.x,
                 startY: line.startNode.y,
                 endX: line.endNode.x,
                 endY: line.endNode.y,
-                length: line.length
-            })),
-            
-            // Сериализуем совмещенные роботы
-            mergedRobots: elements.mergedRobots ? elements.mergedRobots.map(robot => ({
+                length: line.length,
+                layerIndex: line.layerIndex // сохраняем индекс слоя
+            }))
+        };
+    
+        // ДОБАВЛЯЕМ СЕРИАЛИЗАЦИЮ СОВМЕЩЕННЫХ ЭЛЕМЕНТОВ
+        if (elements.mergedRobots) {
+            serialized.mergedRobots = elements.mergedRobots.map(robot => ({
                 x: parseFloat(robot.element.style.left),
                 y: parseFloat(robot.element.style.top),
                 layerIndex: robot.layerIndex,
+                layerId: robot.layerId,
                 speed: robot.speed || 0.6,
                 postStopTime: robot.postStopTime || 30,
                 warehouseStopTime: robot.warehouseStopTime || 300,
-                type: robot.type || 'robot'
-            })) : [],
-            
-            // Сериализуем совмещенные склады
-            mergedWarehouses: elements.mergedWarehouses ? elements.mergedWarehouses.map(wh => ({
-                x: wh.x,
-                y: wh.y,
-                layerIndex: wh.layerIndex
-            })) : []
-        };
+                type: robot.type || 'robot',
+                color: robot.color
+            }));
+        }
+    
+        if (elements.mergedWarehouses) {
+            serialized.mergedWarehouses = elements.mergedWarehouses.map(warehouse => ({
+                x: warehouse.x,
+                y: warehouse.y,
+                layerIndex: warehouse.layerIndex
+            }));
+        }
+    
+        return serialized;
     }
     setupModalEnterHandlers() {
         // Модальное окно поста
@@ -3655,52 +3659,58 @@ class RobotSimulation {
         const previousLayerId = this.currentLayerId;
         this.currentLayerId = layerId;
     
-        // Восстанавливаем робота
-        if (elementsData.robot) {
+        // Инициализируем массивы для совмещенных элементов
+        if (!this.currentElements.mergedRobots) {
+            this.currentElements.mergedRobots = [];
+        }
+        if (!this.currentElements.mergedWarehouses) {
+            this.currentElements.mergedWarehouses = [];
+        }
+    
+        // Восстанавливаем обычные элементы (для обычных слоев)
+        if (elementsData.robot && !layerId.startsWith('merged-')) {
             this.restoreRobot(elementsData.robot);
         }
     
-        // Восстанавливаем склад
-        if (elementsData.warehouse) {
+        if (elementsData.warehouse && !layerId.startsWith('merged-')) {
             this.restoreWarehouse(elementsData.warehouse);
         }
     
-        // Восстанавливаем посты
+        // Восстанавливаем совмещенные элементы (для совмещенных слоев)
+        if (elementsData.mergedRobots && layerId.startsWith('merged-')) {
+            console.log('Restoring merged robots:', elementsData.mergedRobots.length);
+            elementsData.mergedRobots.forEach(robotData => {
+                this.restoreMergedRobot(robotData);
+            });
+        }
+    
+        if (elementsData.mergedWarehouses && layerId.startsWith('merged-')) {
+            console.log('Restoring merged warehouses:', elementsData.mergedWarehouses.length);
+            elementsData.mergedWarehouses.forEach(warehouseData => {
+                this.restoreMergedWarehouse(warehouseData);
+            });
+        }
+    
+        // Восстанавливаем общие элементы
         if (elementsData.posts && elementsData.posts.length > 0) {
             elementsData.posts.forEach(postData => {
                 this.restorePost(postData);
             });
         }
     
-        // Восстанавливаем узлы пути
         if (elementsData.pathNodes && elementsData.pathNodes.length > 0) {
             elementsData.pathNodes.forEach(nodeData => {
                 this.restorePathNode(nodeData);
             });
         }
     
-        // Восстанавливаем конвейеры
         if (elementsData.conveyors && elementsData.conveyors.length > 0) {
             this.restoreConveyors(elementsData.conveyors);
         }
     
-        // Восстанавливаем линии пути (после узлов)
         if (elementsData.pathLines && elementsData.pathLines.length > 0) {
             elementsData.pathLines.forEach(lineData => {
                 this.restorePathLine(lineData);
-            });
-        }
-    
-        // Восстанавливаем совмещенные элементы
-        if (elementsData.mergedRobots && elementsData.mergedRobots.length > 0) {
-            elementsData.mergedRobots.forEach(robotData => {
-                this.restoreMergedRobot(robotData);
-            });
-        }
-    
-        if (elementsData.mergedWarehouses && elementsData.mergedWarehouses.length > 0) {
-            elementsData.mergedWarehouses.forEach(warehouseData => {
-                this.restoreMergedWarehouse(warehouseData);
             });
         }
     
@@ -3708,15 +3718,122 @@ class RobotSimulation {
         this.currentLayerId = previousLayerId;
     }
     restoreMergedRobot(robotData) {
-        // Реализация восстановления совмещенного робота
         console.log('Restoring merged robot:', robotData);
-        // Здесь нужно добавить логику восстановления совмещенных роботов
+    
+        const robot = document.createElement('div');
+        robot.className = 'element robot robot-merged';
+        robot.style.left = robotData.x + 'px';
+        robot.style.top = robotData.y + 'px';
+        robot.style.width = '40px';
+        robot.style.height = '40px';
+        
+        // Используем сохраненный цвет или генерируем новый
+        const color = robotData.color || this.getColorByLayerIndex(robotData.layerIndex);
+        robot.style.border = `3px solid ${color}`;
+        robot.style.borderRadius = '50%';
+        robot.style.zIndex = 20 + (robotData.layerIndex || 0);
+        robot.style.background = 'rgba(255, 255, 255, 0.8)';
+    
+        // Используем соответствующее изображение
+        const robotImage = robotData.type === 'bigRobot'
+            ? this.config.images.bigRobot
+            : this.config.images.robot;
+    
+        robot.innerHTML = `<img src="${robotImage}" alt="Робот" style="width:100%;height:100%;border-radius:50%;">`;
+    
+        const label = document.createElement('div');
+        label.className = 'robot-label';
+        label.textContent = `Робот ${(robotData.layerIndex || 0) + 1} (С${(robotData.layerIndex || 0) + 1})`;
+        label.style.cssText = `
+            position: absolute;
+            background: ${color};
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 30;
+            font-weight: bold;
+        `;
+    
+        const info = document.createElement('div');
+        info.className = 'robot-info';
+        info.textContent = `v=${robotData.speed || 0.6}m/s`;
+        info.style.cssText = `
+            position: absolute;
+            background: white;
+            padding: 2px 6px;
+            border: 1px solid ${color};
+            border-radius: 3px;
+            font-size: 10px;
+            pointer-events: none;
+            z-index: 11;
+            white-space: nowrap;
+        `;
+    
+        const robotObj = {
+            element: robot,
+            label: label,
+            infoElement: info,
+            layerId: robotData.layerId || `layer-${robotData.layerIndex || 0}`,
+            layerIndex: robotData.layerIndex || 0,
+            color: color,
+            speed: robotData.speed || 0.6,
+            postStopTime: robotData.postStopTime || 30,
+            warehouseStopTime: robotData.warehouseStopTime || 300,
+            type: robotData.type || 'robot',
+            simulationData: null
+        };
+    
+        this.workshop.appendChild(robot);
+        this.workshop.appendChild(label);
+        this.workshop.appendChild(info);
+    
+        // Обновляем позиции
+        this.updateRobotLabelPosition(robot, label);
+        info.style.left = (robotData.x + 20) + 'px';
+        info.style.top = (robotData.y - 15) + 'px';
+    
+        // Инициализируем массив если его нет
+        if (!this.currentElements.mergedRobots) {
+            this.currentElements.mergedRobots = [];
+        }
+        
+        this.currentElements.mergedRobots.push(robotObj);
+        console.log('Merged robot restored successfully');
+    }
+
+    getColorByLayerIndex(layerIndex) {
+        const colors = ['#007bff', '#dc3545', '#28a745', '#ffc107', '#17a2b8', '#6f42c1'];
+        return colors[layerIndex % colors.length];
     }
     
     restoreMergedWarehouse(warehouseData) {
-        // Реализация восстановления совмещенного склада
         console.log('Restoring merged warehouse:', warehouseData);
-        // Здесь нужно добавить логику восстановления совмещенных складов
+    
+        const warehouse = document.createElement('div');
+        warehouse.className = 'element warehouse';
+        warehouse.style.left = warehouseData.x + 'px';
+        warehouse.style.top = warehouseData.y + 'px';
+        warehouse.innerHTML = `<img src="${this.config.images.warehouse}" alt="Склад" style="width:100%;height:100%;">`;
+    
+        const warehouseObj = {
+            element: warehouse,
+            x: warehouseData.x,
+            y: warehouseData.y,
+            layerIndex: warehouseData.layerIndex || 0
+        };
+    
+        this.workshop.appendChild(warehouse);
+    
+        // Инициализируем массив если его нет
+        if (!this.currentElements.mergedWarehouses) {
+            this.currentElements.mergedWarehouses = [];
+        }
+        
+        this.currentElements.mergedWarehouses.push(warehouseObj);
+        console.log('Merged warehouse restored successfully');
     }
     restorePost(postData) {
         const post = document.createElement('div');
