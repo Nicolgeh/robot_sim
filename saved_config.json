@@ -1,0 +1,385 @@
+{
+    "config": {
+        "robot": {
+            "speed": 0.6,
+            "stop_time_post": 30,
+            "stop_time_warehouse": 300
+        },
+        "workshop": {
+            "width": 2000,
+            "height": 2000,
+            "scale": 50
+        },
+        "conveyors": {
+            "count": 3,
+            "posts_per_side": 24,
+            "post_spacing": 5
+        },
+        "images": {
+            "robot": "images\/robot.svg",
+            "bigRobot": "images\/bigRobot.svg",
+            "warehouse": "images\/warehouse.svg",
+            "conveyor": "images\/conveyor.svg",
+            "post": "images\/post.svg",
+            "uis": "images\/uis.svg"
+        }
+    },
+    "layers": {
+        "layer-0": {
+            "id": "layer-0",
+            "name": "Слой 1",
+            "visible": true,
+            "elements": {
+                "robot": {
+                    "x": 150,
+                    "y": 350,
+                    "type": "robot",
+                    "speed": 0.6,
+                    "postStopTime": 30,
+                    "warehouseStopTime": 300
+                },
+                "warehouse": {
+                    "x": 150,
+                    "y": 350
+                },
+                "conveyors": [
+                    {
+                        "x": 450,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 1
+                    },
+                    {
+                        "x": 500,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 2
+                    },
+                    {
+                        "x": 550,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 3
+                    },
+                    {
+                        "x": 600,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 4
+                    },
+                    {
+                        "x": 650,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 5
+                    },
+                    {
+                        "x": 700,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 6
+                    },
+                    {
+                        "x": 750,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 7
+                    },
+                    {
+                        "x": 800,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 8
+                    },
+                    {
+                        "x": 850,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 9
+                    },
+                    {
+                        "x": 900,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 10
+                    },
+                    {
+                        "x": 950,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 11
+                    },
+                    {
+                        "x": 1000,
+                        "y": 600,
+                        "systemId": 1,
+                        "segmentNumber": 12
+                    }
+                ],
+                "posts": [
+                    {
+                        "x": 450,
+                        "y": 650,
+                        "type": "post",
+                        "conveyor": 1,
+                        "number": 1
+                    }
+                ],
+                "pathNodes": [
+                    {
+                        "x": 150,
+                        "y": 350
+                    },
+                    {
+                        "x": 150,
+                        "y": 650
+                    },
+                    {
+                        "x": 450,
+                        "y": 650
+                    }
+                ],
+                "pathLines": [
+                    {
+                        "startX": 150,
+                        "startY": 350,
+                        "endX": 150,
+                        "endY": 650,
+                        "length": 6
+                    },
+                    {
+                        "startX": 150,
+                        "startY": 650,
+                        "endX": 450,
+                        "endY": 650,
+                        "length": 6
+                    }
+                ],
+                "mergedRobots": [],
+                "mergedWarehouses": []
+            },
+            "simulation": {
+                "running": false,
+                "paused": false,
+                "visitedPosts": 0,
+                "totalPosts": 0
+            }
+        },
+        "layer-1": {
+            "id": "layer-1",
+            "name": "Слой 2",
+            "visible": true,
+            "elements": {
+                "robot": {
+                    "x": 1250,
+                    "y": 350,
+                    "type": "bigRobot",
+                    "speed": 1,
+                    "postStopTime": 30,
+                    "warehouseStopTime": 300
+                },
+                "warehouse": {
+                    "x": 1250,
+                    "y": 350
+                },
+                "conveyors": [],
+                "posts": [
+                    {
+                        "x": 1250,
+                        "y": 150,
+                        "type": "uis",
+                        "conveyor": 1,
+                        "number": 1
+                    }
+                ],
+                "pathNodes": [
+                    {
+                        "x": 1250,
+                        "y": 350
+                    },
+                    {
+                        "x": 1250,
+                        "y": 150
+                    }
+                ],
+                "pathLines": [
+                    {
+                        "startX": 1250,
+                        "startY": 350,
+                        "endX": 1250,
+                        "endY": 150,
+                        "length": 4
+                    }
+                ],
+                "mergedRobots": [],
+                "mergedWarehouses": []
+            },
+            "simulation": {
+                "running": false,
+                "paused": false,
+                "visitedPosts": 0,
+                "totalPosts": 0
+            }
+        },
+        "merged-1760696173457": {
+            "id": "merged-1760696173457",
+            "name": "Совмещенная симуляция",
+            "visible": true,
+            "elements": {
+                "robot": null,
+                "warehouse": null,
+                "conveyors": [
+                    {
+                        "x": 450,
+                        "y": 600
+                    },
+                    {
+                        "x": 500,
+                        "y": 600
+                    },
+                    {
+                        "x": 550,
+                        "y": 600
+                    },
+                    {
+                        "x": 600,
+                        "y": 600
+                    },
+                    {
+                        "x": 650,
+                        "y": 600
+                    },
+                    {
+                        "x": 700,
+                        "y": 600
+                    },
+                    {
+                        "x": 750,
+                        "y": 600
+                    },
+                    {
+                        "x": 800,
+                        "y": 600
+                    },
+                    {
+                        "x": 850,
+                        "y": 600
+                    },
+                    {
+                        "x": 900,
+                        "y": 600
+                    },
+                    {
+                        "x": 950,
+                        "y": 600
+                    },
+                    {
+                        "x": 1000,
+                        "y": 600
+                    }
+                ],
+                "posts": [
+                    {
+                        "x": 450,
+                        "y": 650,
+                        "type": "post",
+                        "conveyor": 1,
+                        "number": 1
+                    },
+                    {
+                        "x": 1251,
+                        "y": 151,
+                        "type": "post",
+                        "conveyor": 1,
+                        "number": 1
+                    }
+                ],
+                "pathNodes": [
+                    {
+                        "x": 150,
+                        "y": 350
+                    },
+                    {
+                        "x": 150,
+                        "y": 650
+                    },
+                    {
+                        "x": 450,
+                        "y": 650
+                    },
+                    {
+                        "x": 1251,
+                        "y": 351
+                    },
+                    {
+                        "x": 1251,
+                        "y": 151
+                    }
+                ],
+                "pathLines": [
+                    {
+                        "startX": 150,
+                        "startY": 350,
+                        "endX": 150,
+                        "endY": 650,
+                        "length": 6
+                    },
+                    {
+                        "startX": 150,
+                        "startY": 650,
+                        "endX": 450,
+                        "endY": 650,
+                        "length": 6
+                    },
+                    {
+                        "startX": 1251,
+                        "startY": 351,
+                        "endX": 1251,
+                        "endY": 151,
+                        "length": 4
+                    }
+                ],
+                "mergedRobots": [
+                    {
+                        "x": 150,
+                        "y": 350,
+                        "layerIndex": 0,
+                        "speed": 0.6,
+                        "postStopTime": 30,
+                        "warehouseStopTime": 300,
+                        "type": "robot"
+                    },
+                    {
+                        "x": 1251,
+                        "y": 351,
+                        "layerIndex": 1,
+                        "speed": 1,
+                        "postStopTime": 30,
+                        "warehouseStopTime": 300,
+                        "type": "bigRobot"
+                    }
+                ],
+                "mergedWarehouses": [
+                    {
+                        "x": 150,
+                        "y": 350,
+                        "layerIndex": 0
+                    },
+                    {
+                        "x": 1251,
+                        "y": 351,
+                        "layerIndex": 1
+                    }
+                ]
+            },
+            "simulation": {
+                "running": false,
+                "paused": false,
+                "visitedPosts": 0,
+                "totalPosts": 0
+            }
+        }
+    },
+    "currentLayerId": "merged-1760696173457",
+    "timestamp": "2025-10-17T10:16:18.153Z"
+}
