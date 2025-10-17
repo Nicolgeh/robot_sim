@@ -521,8 +521,8 @@ h1 {
 }
 
 .scroll-slider[orient="vertical"] {
-    writing-mode: bt-lr;
-    -webkit-appearance: slider-vertical;
+    writing-mode: vertical-lr;
+    direction: rtl;
 }
 
 .workshop-container {

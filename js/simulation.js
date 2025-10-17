@@ -670,12 +670,12 @@ class RobotSimulation {
     setDeleteMode(mode) {
         this.deleteMode = mode;
         const deleteBtn = document.getElementById('delete-btn');
-    
+
         if (this.deleteMode) {
             deleteBtn.style.backgroundColor = '#ff0000';
             deleteBtn.textContent = 'Режим удаления (кликните на объект)';
             this.workshop.style.cursor = 'pointer';
-            
+
             // Добавляем визуальную обратную связь для всех удаляемых элементов
             document.querySelectorAll('.path-node, .path-line, .line-length').forEach(el => {
                 el.style.opacity = '0.8';
@@ -684,7 +684,7 @@ class RobotSimulation {
             deleteBtn.style.backgroundColor = '#dc3545';
             deleteBtn.textContent = 'Удалить объекты';
             this.workshop.style.cursor = 'default';
-            
+
             // Убираем визуальную обратную связь
             document.querySelectorAll('.path-node, .path-line, .line-length').forEach(el => {
                 el.style.opacity = '1';
@@ -719,7 +719,7 @@ class RobotSimulation {
     debugPathNodes() {
         console.log('=== DEBUG PATH NODES ===');
         console.log('Total nodes:', this.currentElements.pathNodes.length);
-        
+
         this.currentElements.pathNodes.forEach((node, index) => {
             console.log(`Node ${index}:`, {
                 x: node.x,
@@ -729,20 +729,150 @@ class RobotSimulation {
                 element: node.element
             });
         });
-        
+
         console.log('=== END DEBUG ===');
+    }
+    validateMergedLayer() {
+        console.log('=== VALIDATING MERGED LAYER ===');
+
+        if (!this.currentLayerId.startsWith('merged-')) {
+            console.log('Not a merged layer');
+            return;
+        }
+
+        const elements = this.currentElements;
+        let isValid = true;
+        let issues = [];
+
+        // Проверяем роботов
+        if (!elements.mergedRobots || elements.mergedRobots.length === 0) {
+            issues.push('No merged robots');
+            isValid = false;
+        } else {
+            elements.mergedRobots.forEach((robot, index) => {
+                if (!robot.node) {
+                    issues.push(`Robot ${index} has no node`);
+                    isValid = false;
+                }
+            });
+        }
+
+        // Проверяем склады
+        if (!elements.mergedWarehouses || elements.mergedWarehouses.length === 0) {
+            issues.push('No merged warehouses');
+            isValid = false;
+        } else {
+            elements.mergedWarehouses.forEach((warehouse, index) => {
+                if (!warehouse.node) {
+                    issues.push(`Warehouse ${index} has no node`);
+                    isValid = false;
+                }
+            });
+        }
+
+        // Проверяем соответствие роботов и складов
+        if (elements.mergedRobots && elements.mergedWarehouses) {
+            elements.mergedRobots.forEach(robot => {
+                const matchingWarehouse = elements.mergedWarehouses.find(w => w.layerIndex === robot.layerIndex);
+                if (!matchingWarehouse) {
+                    issues.push(`No warehouse for robot layer ${robot.layerIndex}`);
+                    isValid = false;
+                }
+            });
+        }
+
+        console.log(`Merged layer: ${isValid ? 'VALID' : 'INVALID'}`, issues);
+
+        if (!isValid) {
+            console.log('Attempting to fix merged layer issues...');
+            this.fixMergedLayer();
+        }
+
+        return isValid;
+    }
+
+    fixMergedLayerConnections() {
+        console.log('=== FIXING MERGED LAYER CONNECTIONS ===');
+        
+        if (!this.currentLayerId.startsWith('merged-')) {
+            console.log('Not a merged layer');
+            return;
+        }
+    
+        // Создаем узлы для складов, если их нет
+        this.currentElements.mergedWarehouses.forEach(warehouse => {
+            if (!warehouse.node) {
+                console.log('Creating node for warehouse layer', warehouse.layerIndex);
+                const node = this.placePathNode(warehouse.x, warehouse.y);
+                node.layerIndex = warehouse.layerIndex;
+                warehouse.node = node;
+            }
+        });
+    
+        // Создаем узлы для роботов, если их нет
+        this.currentElements.mergedRobots.forEach(robot => {
+            if (!robot.node) {
+                console.log('Creating node for robot layer', robot.layerIndex);
+                const node = this.placePathNode(robot.x, robot.y);
+                node.layerIndex = robot.layerIndex;
+                robot.node = node;
+            }
+        });
+    
+        // Восстанавливаем связи постов
+        this.restoreConnectionsForMergedLayer();
+    
+        console.log('Merged layer connections fixed');
+    }
+
+    fixMergedLayer() {
+        console.log('Fixing merged layer issues...');
+        
+        // Создаем узлы для роботов, у которых их нет
+        this.currentElements.mergedRobots.forEach(robot => {
+            if (!robot.node) {
+                console.log('Creating node for robot layer', robot.layerIndex);
+                const node = this.placePathNode(robot.x, robot.y);
+                node.layerIndex = robot.layerIndex;
+                robot.node = node;
+            }
+        });
+        
+        // Создаем узлы для складов, у которых их нет
+        this.currentElements.mergedWarehouses.forEach(warehouse => {
+            if (!warehouse.node) {
+                console.log('Creating node for warehouse layer', warehouse.layerIndex);
+                const node = this.placePathNode(warehouse.x, warehouse.y);
+                node.layerIndex = warehouse.layerIndex;
+                warehouse.node = node;
+            }
+        });
+        
+        console.log('Merged layer fixes completed');
     }
 
     setupEventListeners() {
+        const fixMergedConnectionsBtn = document.getElementById('fix-merged-connections-btn');
+if (fixMergedConnectionsBtn) {
+    fixMergedConnectionsBtn.addEventListener('click', () => this.fixMergedLayerConnections());
+}
+        const validateMergedBtn = document.getElementById('validate-merged-btn');
+if (validateMergedBtn) {
+    validateMergedBtn.addEventListener('click', () => this.validateMergedLayer());
+}
         const checkNodesBtn = document.getElementById('check-nodes-btn');
-if (checkNodesBtn) {
-    checkNodesBtn.addEventListener('click', () => this.checkAndFixNodes());
-}
+        if (checkNodesBtn) {
+            checkNodesBtn.addEventListener('click', () => this.checkAndFixNodes());
+        }
+        const validateRoutesBtn = document.getElementById('validate-routes-btn');
+        if (validateRoutesBtn) {
+            validateRoutesBtn.addEventListener('click', () => this.validateRoutes());
+        }
 
-const recreateNodesBtn = document.getElementById('recreate-nodes-btn');
-if (recreateNodesBtn) {
-    recreateNodesBtn.addEventListener('click', () => this.recreateAllNodes());
-}
+        const recreateNodesBtn = document.getElementById('recreate-nodes-btn');
+        if (recreateNodesBtn) {
+            recreateNodesBtn.addEventListener('click', () => this.recreateAllNodes());
+        }
         const controlButtons = ['save-btn', 'load-btn', 'start-btn', 'stop-btn', 'resume-btn', 'reset-btn', 'delete-btn', 'auto-route-btn'];
 
         controlButtons.forEach(btnId => {
@@ -810,10 +940,10 @@ if (recreateNodesBtn) {
     }
     serializeLayersForSave() {
         const serializedLayers = {};
-        
+
         Object.keys(this.layers).forEach(layerId => {
             const layer = this.layers[layerId];
-            
+
             serializedLayers[layerId] = {
                 id: layer.id,
                 name: layer.name,
@@ -827,7 +957,7 @@ if (recreateNodesBtn) {
                 }
             };
         });
-        
+
         return serializedLayers;
     }
     serializeElements(elements) {
@@ -859,7 +989,8 @@ if (recreateNodesBtn) {
                 type: post.type || 'post',
                 conveyor: post.conveyor || 1,
                 number: post.number || 1,
-                visited: post.visited || false
+                visited: post.visited || false,
+                layerIndex: post.layerIndex // ДОБАВЛЯЕМ layerIndex
             })),
             
             pathNodes: elements.pathNodes.map(node => ({
@@ -878,7 +1009,6 @@ if (recreateNodesBtn) {
             }))
         };
     
-        // ДОБАВЛЯЕМ СЕРИАЛИЗАЦИЮ СОВМЕЩЕННЫХ ЭЛЕМЕНТОВ
         if (elements.mergedRobots) {
             serialized.mergedRobots = elements.mergedRobots.map(robot => ({
                 x: parseFloat(robot.element.style.left),
@@ -1011,7 +1141,7 @@ if (recreateNodesBtn) {
     toggleDeleteMode() {
         this.deleteMode = !this.deleteMode;
         this.setDeleteMode(this.deleteMode);
-    
+
         if (this.deleteMode) {
             this.selectedTool = null;
             document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
@@ -1024,27 +1154,27 @@ if (recreateNodesBtn) {
     }
     handleWorkshopClick(e) {
         console.log('Workshop clicked - target:', e.target.className, 'delete mode:', this.deleteMode);
-        
+
         if (this.deleteMode) {
             this.handleDelete(e);
             return;
         }
-    
+
         if (!this.selectedTool) {
             console.log('No tool selected');
             return;
         }
-    
+
         const rect = this.workshop.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-    
+
         const snapPoint = this.findClosestSnapPoint(x, y);
         const finalX = snapPoint.x;
         const finalY = snapPoint.y;
-    
+
         console.log('Placing element:', this.selectedTool, 'at', finalX, finalY);
-    
+
         switch (this.selectedTool) {
             case 'robot':
                 this.placeRobot(finalX, finalY, 'robot');
@@ -1410,27 +1540,27 @@ if (recreateNodesBtn) {
         const existingNode = this.currentElements.pathNodes.find(node =>
             Math.abs(node.x - x) < 5 && Math.abs(node.y - y) < 5
         );
-    
+
         if (existingNode) {
             return existingNode;
         }
-    
+
         const node = document.createElement('div');
         node.className = 'path-node';
-        
+
         // ПРОСТОЕ ПОЗИЦИОНИРОВАНИЕ БЕЗ СЛОЖНЫХ TRANSFORM
         node.style.left = x + 'px';
         node.style.top = y + 'px';
-    
+
         // УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК
         node.addEventListener('click', (e) => {
             e.stopPropagation();
             console.log('Path node clicked', {
                 deleteMode: this.deleteMode,
                 selectedTool: this.selectedTool,
-                nodePosition: {x, y}
+                nodePosition: { x, y }
             });
-            
+
             if (this.deleteMode) {
                 console.log('Attempting to delete node');
                 this.removePathNode(node);
@@ -1438,36 +1568,36 @@ if (recreateNodesBtn) {
                 this.connectToNode(node);
             }
         });
-    
+
         this.workshop.appendChild(node);
-    
+
         const nodeData = {
             element: node,
             x: x,
             y: y,
             connections: []
         };
-    
+
         this.currentElements.pathNodes.push(nodeData);
-        
+
         console.log('Path node created successfully at:', x, y);
         return nodeData;
     }
     updatePathNodesEventHandlers() {
         console.log('Updating event handlers for all path nodes');
-        
+
         this.currentElements.pathNodes.forEach(nodeData => {
             const node = nodeData.element;
-            
+
             // Удаляем старые обработчики
             node.replaceWith(node.cloneNode(true));
             const newNode = node.parentNode.lastElementChild;
-            
+
             // Добавляем новые обработчики
             newNode.addEventListener('click', (e) => {
                 e.stopPropagation();
                 console.log('Path node clicked (updated handler), delete mode:', this.deleteMode);
-                
+
                 if (this.deleteMode) {
                     console.log('Deleting path node with updated handler');
                     this.removePathNode(newNode);
@@ -1475,11 +1605,11 @@ if (recreateNodesBtn) {
                     this.connectToNode(newNode);
                 }
             });
-            
+
             // Обновляем ссылку в данных
             nodeData.element = newNode;
         });
-        
+
         console.log('Event handlers updated for', this.currentElements.pathNodes.length, 'nodes');
     }
 
@@ -1583,21 +1713,21 @@ if (recreateNodesBtn) {
             this.closeRobotModal();
             return;
         }
-    
+
         const speedInput = document.getElementById('robot-speed-input');
         const postTimeInput = document.getElementById('robot-post-time');
         const warehouseTimeInput = document.getElementById('robot-warehouse-time');
-    
+
         // Проверка существования элементов ввода
         if (!speedInput || !postTimeInput || !warehouseTimeInput) {
             console.error('Robot configuration inputs not found!');
             return;
         }
-    
+
         const speed = parseFloat(speedInput.value) || 0.6;
         const postTime = parseInt(postTimeInput.value) || 30;
         const warehouseTime = parseInt(warehouseTimeInput.value) || 300;
-    
+
         // Удаляем существующего робота если есть
         if (this.currentElements.robot && this.currentElements.robot.parentNode) {
             this.workshop.removeChild(this.currentElements.robot);
@@ -1605,24 +1735,24 @@ if (recreateNodesBtn) {
                 this.workshop.removeChild(this.currentElements.robot.infoElement);
             }
         }
-    
+
         const robot = document.createElement('div');
         robot.className = 'element robot';
         robot.style.left = this.currentRobotForEdit.x + 'px';
         robot.style.top = this.currentRobotForEdit.y + 'px';
-    
+
         // Используем соответствующее изображение в зависимости от типа
         const robotType = this.currentRobotForEdit.type || 'robot';
         const robotImage = robotType === 'bigRobot'
             ? this.config.images.bigRobot
             : this.config.images.robot;
-    
+
         robot.innerHTML = `<img src="${robotImage}" alt="Робот" style="width:100%;height:100%;">`;
         robot.dataset.robotType = robotType;
-    
+
         this.workshop.appendChild(robot);
         this.currentElements.robot = robot;
-    
+
         const info = document.createElement('div');
         info.className = 'robot-info';
         info.style.left = (this.currentRobotForEdit.x + 20) + 'px';
@@ -1639,19 +1769,19 @@ if (recreateNodesBtn) {
             z-index: 11;
             white-space: nowrap;
         `;
-    
+
         this.workshop.appendChild(info);
-    
+
         // Сохраняем данные робота
         this.currentElements.robot.speed = speed;
         this.currentElements.robot.postStopTime = postTime;
         this.currentElements.robot.warehouseStopTime = warehouseTime;
         this.currentElements.robot.infoElement = info;
         this.currentElements.robot.type = robotType;
-    
+
         this.placePathNode(this.currentRobotForEdit.x, this.currentRobotForEdit.y);
         this.closeRobotModal();
-    
+
         console.log('Robot created with type:', robotType);
     }
 
@@ -1659,22 +1789,22 @@ if (recreateNodesBtn) {
         console.log('=== START removePathNode ===');
         console.log('Node element:', nodeElement);
         console.log('Current path nodes count:', this.currentElements.pathNodes.length);
-    
+
         const nodeIndex = this.currentElements.pathNodes.findIndex(n => n.element === nodeElement);
         console.log('Found node index:', nodeIndex);
-    
+
         if (nodeIndex === -1) {
             console.log('Node not found in current elements');
             return;
         }
-    
+
         const node = this.currentElements.pathNodes[nodeIndex];
         console.log('Removing path node with', node.connections.length, 'connections');
-    
+
         // Создаем копию соединений для безопасного удаления
         const connectionsToRemove = [...node.connections];
         console.log('Connections to remove:', connectionsToRemove.length);
-    
+
         connectionsToRemove.forEach((connection, index) => {
             console.log(`Processing connection ${index + 1}/${connectionsToRemove.length}`);
             const connectedNode = connection.node;
@@ -1682,7 +1812,7 @@ if (recreateNodesBtn) {
                 console.log('Removing connection from connected node');
                 // Удаляем соединение из связанного узла
                 connectedNode.connections = connectedNode.connections.filter(c => c.lineElement !== connection.lineElement);
-    
+
                 // Удаляем линию
                 const lineElement = connection.lineElement;
                 if (lineElement && lineElement.parentNode) {
@@ -1702,7 +1832,7 @@ if (recreateNodesBtn) {
                 }
             }
         });
-    
+
         // Удаляем узел
         if (node.element.parentNode) {
             this.workshop.removeChild(node.element);
@@ -1710,7 +1840,7 @@ if (recreateNodesBtn) {
         }
         this.currentElements.pathNodes.splice(nodeIndex, 1);
         console.log('Node removed from array');
-    
+
         // Обновляем ссылки на узлы в постах
         this.currentElements.posts.forEach(post => {
             if (post.node === node) {
@@ -1718,20 +1848,20 @@ if (recreateNodesBtn) {
                 console.log('Cleared node reference from post');
             }
         });
-    
+
         console.log('Remaining path nodes:', this.currentElements.pathNodes.length);
         console.log('=== END removePathNode ===');
     }
 
     removePathNode(nodeElement) {
         console.log('=== START removePathNode ===');
-        
+
         // Проверяем, что элемент существует
         if (!nodeElement) {
             console.log('No node element provided');
             return;
         }
-        
+
         // Проверяем, что элемент в DOM
         if (!nodeElement.parentNode) {
             console.log('Node element already removed from DOM');
@@ -1741,69 +1871,69 @@ if (recreateNodesBtn) {
             );
             return;
         }
-    
+
         const nodeIndex = this.currentElements.pathNodes.findIndex(n => n.element === nodeElement);
         console.log('Found node index:', nodeIndex, 'Total nodes:', this.currentElements.pathNodes.length);
-    
+
         if (nodeIndex === -1) {
             console.log('Node not found in array, but removing from DOM');
             nodeElement.remove();
             return;
         }
-    
+
         const node = this.currentElements.pathNodes[nodeIndex];
         console.log('Removing node with', node.connections.length, 'connections');
-    
+
         // Удаляем все соединения этого узла
         const connectionsToRemove = [...node.connections];
-        
+
         connectionsToRemove.forEach((connection, index) => {
             console.log(`Removing connection ${index + 1}/${connectionsToRemove.length}`);
-            
+
             if (connection.node && connection.node.connections) {
                 // Удаляем обратную ссылку из связанного узла
                 connection.node.connections = connection.node.connections.filter(
                     conn => conn.lineElement !== connection.lineElement
                 );
             }
-    
+
             // Удаляем линию
             if (connection.lineElement) {
                 const lineIndex = this.currentElements.pathLines.findIndex(
                     line => line.element === connection.lineElement
                 );
-                
+
                 if (lineIndex !== -1) {
                     const lineData = this.currentElements.pathLines[lineIndex];
-                    
+
                     // Удаляем label линии
                     if (lineData.labelElement && lineData.labelElement.parentNode) {
                         lineData.labelElement.remove();
                     }
-                    
+
                     // Удаляем саму линию
                     if (connection.lineElement.parentNode) {
                         connection.lineElement.remove();
                     }
-                    
+
                     this.currentElements.pathLines.splice(lineIndex, 1);
                 }
             }
         });
-    
+
         // Удаляем узел из DOM
         nodeElement.remove();
-        
+
         // Удаляем узел из массива
         this.currentElements.pathNodes.splice(nodeIndex, 1);
-    
+
         // Обновляем ссылки в постах
         this.currentElements.posts.forEach(post => {
             if (post.node === node) {
                 post.node = null;
             }
         });
-    
+
         console.log('Node removal completed. Remaining nodes:', this.currentElements.pathNodes.length);
         console.log('=== END removePathNode ===');
     }
@@ -1879,18 +2009,18 @@ if (recreateNodesBtn) {
     createConnection(node1, node2, customLength = null) {
         const line = document.createElement('div');
         line.className = 'path-line';
-    
+
         const dx = node2.x - node1.x;
         const dy = node2.y - node1.y;
         const visualLength = Math.sqrt(dx * dx + dy * dy);
         const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    
+
         line.style.width = visualLength + 'px';
         line.style.left = node1.x + 'px';
         line.style.top = node1.y + 'px';
         line.style.transform = `rotate(${angle}deg)`;
         line.style.transformOrigin = '0 0';
-    
+
         // Обработчик для удаления
         line.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1898,24 +2028,24 @@ if (recreateNodesBtn) {
                 this.removePathLine(line);
             }
         });
-    
+
         this.workshop.appendChild(line);
-    
+
         const connectionLength = customLength || (visualLength / this.config.workshop.scale);
-    
+
         // Создаем соединения
         node1.connections.push({
             node: node2,
             lineElement: line,
             length: connectionLength
         });
-    
+
         node2.connections.push({
             node: node1,
             lineElement: line,
             length: connectionLength
         });
-    
+
         const lineData = {
             element: line,
             startNode: node1,
@@ -1923,7 +2053,7 @@ if (recreateNodesBtn) {
             length: connectionLength,
             labelElement: null
         };
-    
+
         this.currentElements.pathLines.push(lineData);
         this.updateLineLengthDisplay(lineData);
     }
@@ -1987,14 +2117,14 @@ if (recreateNodesBtn) {
         if (lineData.labelElement && lineData.labelElement.parentNode) {
             this.workshop.removeChild(lineData.labelElement);
         }
-    
+
         const label = document.createElement('div');
         label.className = 'line-length';
         label.textContent = lineData.length.toFixed(1) + 'м';
         label.style.left = (lineData.startNode.x + (lineData.endNode.x - lineData.startNode.x) / 2) + 'px';
         label.style.top = (lineData.startNode.y + (lineData.endNode.y - lineData.startNode.y) / 2) + 'px';
         label.style.cursor = 'pointer';
-    
+
         // ОБНОВЛЕННЫЙ ОБРАБОТЧИК - добавляем поддержку удаления
         label.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -2005,7 +2135,7 @@ if (recreateNodesBtn) {
                 this.editLineLengthFromLabel(label);
             }
         });
-    
+
         this.workshop.appendChild(label);
         lineData.labelElement = label;
     }
@@ -2113,9 +2243,9 @@ if (recreateNodesBtn) {
 
     recreateAllNodes() {
         console.log('=== RECREATING ALL NODES ===');
-        
+
         const nodesData = [...this.currentElements.pathNodes];
-        
+
         // Сохраняем соединения
         const connections = [];
         nodesData.forEach(node => {
@@ -2127,7 +2257,7 @@ if (recreateNodesBtn) {
                 });
             });
         });
-        
+
         // Очищаем
         this.currentElements.pathNodes.forEach(node => {
             if (node.element && node.element.parentNode) {
@@ -2144,12 +2274,12 @@ if (recreateNodesBtn) {
             }
         });
         this.currentElements.pathLines = [];
-        
+
         // Пересоздаем узлы
         nodesData.forEach(nodeData => {
             this.placePathNode(nodeData.x, nodeData.y);
         });
-        
+
         // Восстанавливаем соединения
         connections.forEach(conn => {
             const node1 = this.currentElements.pathNodes.find(
@@ -2158,12 +2288,12 @@ if (recreateNodesBtn) {
             const node2 = this.currentElements.pathNodes.find(
                 n => n.x === conn.node2.x && n.y === conn.node2.y
             );
-            
+
             if (node1 && node2) {
                 this.createConnection(node1, node2, conn.length);
             }
         });
-        
+
         console.log('Nodes recreated:', this.currentElements.pathNodes.length);
     }
 
@@ -2172,7 +2302,7 @@ if (recreateNodesBtn) {
         console.log('Total nodes:', this.currentElements.pathNodes.length);
         console.log('Delete mode:', this.deleteMode);
         console.log('Selected tool:', this.selectedTool);
-        
+
         this.currentElements.pathNodes.forEach((node, index) => {
             const element = node.element;
             console.log(`Node ${index}:`, {
@@ -2185,7 +2315,7 @@ if (recreateNodesBtn) {
                 className: element.className
             });
         });
-        
+
         // Проверяем обработчики событий
         console.log('Checking event listeners...');
         this.currentElements.pathNodes.forEach((node, index) => {
@@ -2196,14 +2326,14 @@ if (recreateNodesBtn) {
                 console.log(`Node ${index} event listeners check - NO ELEMENT`);
             }
         });
-        
+
         console.log('=== END DEBUG ===');
     }
 
     checkAndFixNodes() {
         console.log('=== CHECKING NODES ===');
         let fixedCount = 0;
-        
+
         this.currentElements.pathNodes.forEach((node, index) => {
             const element = node.element;
             if (!element) {
@@ -2212,17 +2342,17 @@ if (recreateNodesBtn) {
                 fixedCount++;
                 return;
             }
-            
+
             if (!element.parentNode) {
                 console.log(`Node ${index} element not in DOM - re-adding`);
                 this.workshop.appendChild(element);
                 fixedCount++;
             }
-            
+
             // Проверяем позиционирование
             const currentLeft = parseFloat(element.style.left);
             const currentTop = parseFloat(element.style.top);
-            
+
             if (currentLeft !== node.x || currentTop !== node.y) {
                 console.log(`Node ${index} position mismatch - fixing`);
                 element.style.left = node.x + 'px';
@@ -2230,7 +2360,7 @@ if (recreateNodesBtn) {
                 fixedCount++;
             }
         });
-        
+
         console.log(`Fixed ${fixedCount} nodes`);
         return fixedCount;
     }
@@ -2256,11 +2386,16 @@ if (recreateNodesBtn) {
                 warehouse.style.left = (originalX + offsetX) + 'px';
                 warehouse.style.top = (originalY + offsetY) + 'px';
 
+                // СОЗДАЕМ УЗЕЛ ДЛЯ СКЛАДА
+                const warehouseNode = this.placePathNode(originalX + offsetX, originalY + offsetY);
+                warehouseNode.layerIndex = layerIndex;
+
                 targetLayer.elements.mergedWarehouses.push({
                     element: warehouse,
                     x: originalX + offsetX,
                     y: originalY + offsetY,
-                    layerIndex: layerIndex
+                    layerIndex: layerIndex,
+                    node: warehouseNode // сохраняем узел
                 });
                 this.workshop.appendChild(warehouse);
             }
@@ -2394,12 +2529,16 @@ if (recreateNodesBtn) {
         let robotX = parseFloat(originalRobot.style.left);
         let robotY = parseFloat(originalRobot.style.top);
 
-        const offsetX = layerIndex * 200;
-        const offsetY = layerIndex * 200;
+        const offsetX = layerIndex;
+        const offsetY = layerIndex;
         robotX += offsetX;
         robotY += offsetY;
 
         console.log('Creating merged robot at position:', robotX, robotY, 'for layer:', layerIndex);
+
+        // СОЗДАЕМ УЗЕЛ ДЛЯ РОБОТА В СОВМЕЩЕННОМ СЛОЕ
+        const robotNode = this.placePathNode(robotX, robotY);
+        robotNode.layerIndex = layerIndex; // помечаем узел как принадлежащий слою
 
         const robot = document.createElement('div');
         robot.className = 'element robot robot-merged';
@@ -2460,8 +2599,9 @@ if (recreateNodesBtn) {
             speed: originalRobot.speed || 0.6,
             postStopTime: originalRobot.postStopTime || 30,
             warehouseStopTime: originalRobot.warehouseStopTime || 300,
-            type: originalRobot.type || 'robot', // Сохраняем тип
-            simulationData: null
+            type: originalRobot.type || 'robot',
+            simulationData: null,
+            node: robotNode // сохраняем узел робота
         };
 
         targetLayer.elements.mergedRobots.push(robotData);
@@ -2495,88 +2635,69 @@ if (recreateNodesBtn) {
         lineData.labelElement = label;
     }
 
-    prepareMergedSimulationData(layer, layerIndex, mergedLayer) {
-        console.log('Preparing simulation data for layer:', layer.id, 'index:', layerIndex);
-
-        if (!layer || !layer.elements.robot || !layer.elements.warehouse || !layer.elements.posts || layer.elements.posts.length === 0) {
-            console.log('Missing required elements for layer:', layer ? layer.id : 'no layer',
-                'robot:', !!layer?.elements?.robot,
-                'warehouse:', !!layer?.elements?.warehouse,
-                'posts:', layer?.elements?.posts?.length || 0);
+    prepareMergedSimulationData(sourceLayer, layerIndex, mergedLayer) {
+        console.log('Preparing simulation data for layer:', sourceLayer.id, 'index:', layerIndex);
+        console.log('Source layer posts:', sourceLayer.elements.posts?.length || 0);
+        console.log('Merged layer posts:', mergedLayer.elements.posts?.length || 0);
+    
+        if (!sourceLayer || !sourceLayer.elements.robot || !sourceLayer.elements.warehouse || !sourceLayer.elements.posts || sourceLayer.elements.posts.length === 0) {
+            console.log('Missing required elements for layer:', sourceLayer ? sourceLayer.id : 'no layer',
+                'robot:', !!sourceLayer?.elements?.robot,
+                'warehouse:', !!sourceLayer?.elements?.warehouse,
+                'posts:', sourceLayer?.elements?.posts?.length || 0);
             return null;
         }
-
-        console.log('Finding merged nodes for robot and warehouse...');
-
-        // Находим соответствующие узлы в совмещенном слое
-        const robotNode = this.findMergedNode(layer.elements.robot, layerIndex, mergedLayer);
-        const warehouseNode = this.findMergedNode(layer.elements.warehouse, layerIndex, mergedLayer);
-
+    
+        // Ищем соответствующие узлы в СОВМЕЩЕННОМ слое
+        const robotNode = this.findMergedNode(sourceLayer.elements.robot, layerIndex, mergedLayer);
+        const warehouseNode = this.findMergedNode(sourceLayer.elements.warehouse, layerIndex, mergedLayer);
+    
         console.log('Found merged nodes - robot:', !!robotNode, 'warehouse:', !!warehouseNode);
-
+    
         if (!robotNode || !warehouseNode) {
-            console.log('Could not find merged nodes for layer:', layer.id,
+            console.log('Could not find merged nodes for layer:', sourceLayer.id,
                 'robotNode:', !!robotNode, 'warehouseNode:', !!warehouseNode);
-
-            // Попробуем найти узлы через merged элементы
-            if (!robotNode && mergedLayer.elements.mergedRobots) {
-                const mergedRobot = mergedLayer.elements.mergedRobots.find(r => r.layerIndex === layerIndex);
-                if (mergedRobot) {
-                    const alternativeRobotNode = this.findMergedNode(mergedRobot.element, layerIndex, mergedLayer);
-                    if (alternativeRobotNode) {
-                        console.log('Found robot node through merged robot');
-                        robotNode = alternativeRobotNode;
-                    }
-                }
-            }
-
-            if (!warehouseNode && mergedLayer.elements.mergedWarehouses) {
-                const mergedWarehouse = mergedLayer.elements.mergedWarehouses.find(w => w.layerIndex === layerIndex);
-                if (mergedWarehouse) {
-                    const alternativeWarehouseNode = this.findMergedNode(mergedWarehouse.element, layerIndex, mergedLayer);
-                    if (alternativeWarehouseNode) {
-                        console.log('Found warehouse node through merged warehouse');
-                        warehouseNode = alternativeWarehouseNode;
-                    }
-                }
-            }
-
-            if (!robotNode || !warehouseNode) {
-                return null;
-            }
+            return null;
         }
-
-        // Фильтруем посты только для этого слоя
-        const layerPosts = mergedLayer.elements.posts.filter(post =>
+    
+        // Ищем посты в СОВМЕЩЕННОМ слое для этого layerIndex
+        const layerPosts = mergedLayer.elements.posts.filter(post => 
             post.layerIndex === layerIndex
         );
-
-        // Принудительно ищем узлы для всех постов
+    
+        console.log('Found posts in merged layer for layer', layerIndex, ':', layerPosts.length);
+    
+        if (layerPosts.length === 0) {
+            console.log('No posts found in merged layer for layer:', layerIndex);
+            return null;
+        }
+    
+        // Убедимся, что у всех постов есть узлы
         const postsWithNodes = [];
         layerPosts.forEach(post => {
             if (!post.node) {
-                // Если у поста нет узла, ищем его
+                // Если у поста нет узла, ищем его в совмещенном слое
                 post.node = this.findMergedNode(post.element, layerIndex, mergedLayer);
             }
             if (post.node) {
                 postsWithNodes.push(post);
             } else {
-                console.log('Could not find node for post:', post.conveyor, post.number);
+                console.log('Could not find node for post in merged layer:', post.conveyor, post.number);
             }
         });
-
+    
         if (postsWithNodes.length === 0) {
-            console.log('No posts with nodes found for layer:', layer.id);
+            console.log('No posts with nodes found for layer:', sourceLayer.id);
             return null;
         }
-
+    
         const sortedPosts = [...postsWithNodes].sort((a, b) => {
             if (a.conveyor !== b.conveyor) return a.conveyor - b.conveyor;
             return a.number - b.number;
         });
-
-        console.log('Successfully prepared simulation data for', sortedPosts.length, 'posts');
-
+    
+        console.log('Successfully prepared simulation data for', sortedPosts.length, 'posts in merged layer');
+    
         return {
             robotNode: robotNode,
             warehouseNode: warehouseNode,
@@ -2585,9 +2706,9 @@ if (recreateNodesBtn) {
             currentPath: [],
             isMoving: false,
             layerIndex: layerIndex,
-            speed: layer.elements.robot.speed || 0.6,
-            postStopTime: layer.elements.robot.postStopTime || 30,
-            warehouseStopTime: layer.elements.robot.warehouseStopTime || 300
+            speed: sourceLayer.elements.robot.speed || 0.6,
+            postStopTime: sourceLayer.elements.robot.postStopTime || 30,
+            warehouseStopTime: sourceLayer.elements.robot.warehouseStopTime || 300
         };
     }
 
@@ -2598,20 +2719,33 @@ if (recreateNodesBtn) {
             console.log('No original element provided');
             return null;
         }
-
-        // Получаем позицию элемента из его стилей
-        const elementX = parseFloat(originalElement.style.left);
-        const elementY = parseFloat(originalElement.style.top);
-
+    
+        // Получаем координаты элемента
+        let elementX, elementY;
+        if (originalElement.style && originalElement.style.left && originalElement.style.top) {
+            elementX = parseFloat(originalElement.style.left);
+            elementY = parseFloat(originalElement.style.top);
+        } else if (originalElement.x !== undefined && originalElement.y !== undefined) {
+            elementX = originalElement.x;
+            elementY = originalElement.y;
+        } else if (originalElement.getBoundingClientRect) {
+            const rect = originalElement.getBoundingClientRect();
+            const workshopRect = this.workshop.getBoundingClientRect();
+            elementX = rect.left - workshopRect.left + rect.width / 2;
+            elementY = rect.top - workshopRect.top + rect.height / 2;
+        } else {
+            return null;
+        }
+    
         console.log('Finding merged node for element at:', elementX, elementY, 'layer:', layerIndex);
-
-        // Ищем ближайший узел в совмещенном слое для этого layerIndex
+    
         let closestNode = null;
         let minDistance = Infinity;
-        const searchRadius = 100; // увеличенный радиус поиска
-
+        const searchRadius = 50;
+    
         mergedLayer.elements.pathNodes.forEach(node => {
-            if (node.layerIndex === layerIndex) {
+            // Ищем узлы с правильным layerIndex или без него (для обратной совместимости)
+            if (node.layerIndex === layerIndex || node.layerIndex === undefined || layerIndex === undefined) {
                 const distance = Math.sqrt(Math.pow(node.x - elementX, 2) + Math.pow(node.y - elementY, 2));
                 if (distance < minDistance && distance < searchRadius) {
                     minDistance = distance;
@@ -2619,27 +2753,25 @@ if (recreateNodesBtn) {
                 }
             }
         });
-
+    
         if (!closestNode) {
-            console.log('No merged node found within radius. Trying to find closest node regardless of radius...');
-            // Если не нашли в радиусе, берем самый близкий узел
+            console.log('No merged node found within radius. Trying any node...');
+            // Если не нашли по layerIndex, ищем любой ближайший узел
             mergedLayer.elements.pathNodes.forEach(node => {
-                if (node.layerIndex === layerIndex) {
-                    const distance = Math.sqrt(Math.pow(node.x - elementX, 2) + Math.pow(node.y - elementY, 2));
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestNode = node;
-                    }
+                const distance = Math.sqrt(Math.pow(node.x - elementX, 2) + Math.pow(node.y - elementY, 2));
+                if (distance < minDistance && distance < searchRadius) {
+                    minDistance = distance;
+                    closestNode = node;
                 }
             });
         }
-
+    
         if (closestNode) {
-            console.log('Found merged node at:', closestNode.x, closestNode.y, 'distance:', minDistance);
+            console.log('Found merged node at:', closestNode.x, closestNode.y, 'distance:', minDistance, 'layer:', closestNode.layerIndex);
         } else {
-            console.log('Could not find any node for element');
+            console.log('Could not find any node for element in layer', layerIndex);
         }
-
+    
         return closestNode;
     }
 
@@ -2724,6 +2856,9 @@ if (recreateNodesBtn) {
     // ОСНОВНЫЕ МЕТОДЫ СИМУЛЯЦИИ
 
     startSimulation() {
+        // ПРОВЕРЯЕМ ВАЛИДНОСТЬ ПЕРЕД ЗАПУСКОМ
+        this.validateRoutes();
+
         if (this.currentLayerId.startsWith('merged-')) {
             this.startMergedSimulation();
         } else {
@@ -2820,22 +2955,48 @@ if (recreateNodesBtn) {
         const elements = layer.elements;
 
         if (!elements.robot || !elements.warehouse || elements.posts.length === 0) {
+            console.log('Cannot generate route: missing robot, warehouse, or posts');
             return;
         }
 
-        const robotNode = this.findClosestNodeInLayer(elements.robot, layer);
-        const warehouseNode = this.findClosestNodeInLayer(elements.warehouse, layer);
-
-        if (!robotNode || !warehouseNode) {
-            return;
+        // Проверяем наличие узлов у ключевых элементов
+        if (!elements.robot.node) {
+            elements.robot.node = this.findClosestNode(elements.robot);
+            console.log('Auto-assigned robot node:', elements.robot.node);
         }
 
+        if (!elements.warehouse.node) {
+            elements.warehouse.node = this.findClosestNode(elements.warehouse);
+            console.log('Auto-assigned warehouse node:', elements.warehouse.node);
+        }
+
+        // Проверяем узлы у постов
         const postsWithoutNodes = elements.posts.filter(post => !post.node);
         if (postsWithoutNodes.length > 0) {
+            console.log('Some posts missing nodes, attempting to assign:', postsWithoutNodes.length);
+            postsWithoutNodes.forEach(post => {
+                post.node = this.findClosestNode(post.element);
+                if (post.node) {
+                    console.log('Assigned node to post:', post.conveyor, post.number);
+                }
+            });
+        }
+
+        const robotNode = elements.robot.node;
+        const warehouseNode = elements.warehouse.node;
+
+        if (!robotNode || !warehouseNode) {
+            console.error('Cannot generate route: missing robot or warehouse nodes');
             return;
         }
 
-        const sortedPosts = [...elements.posts].sort((a, b) => {
+        const postsWithNodes = elements.posts.filter(post => post.node);
+        if (postsWithNodes.length === 0) {
+            console.error('Cannot generate route: no posts with nodes');
+            return;
+        }
+
+        const sortedPosts = [...postsWithNodes].sort((a, b) => {
             if (a.conveyor !== b.conveyor) return a.conveyor - b.conveyor;
             return a.number - b.number;
         });
@@ -2843,6 +3004,9 @@ if (recreateNodesBtn) {
         layer.simulation.postsToVisit = sortedPosts;
         layer.simulation.totalPosts = sortedPosts.length;
         layer.simulation.visitedPosts = 0;
+
+        console.log('Auto route generated for', sortedPosts.length, 'posts');
+        this.updatePostsVisited();
     }
 
     findClosestNodeInLayer(element, layer) {
@@ -3039,41 +3203,71 @@ if (recreateNodesBtn) {
 
     createIndependentSimulationData(robotData) {
         console.log('Creating independent simulation data for robot:', robotData.layerIndex);
-
-        // Находим склад для этого робота
+        console.log('All posts in current merged layer:', this.currentElements.posts.length);
+        console.log('Robot layerIndex:', robotData.layerIndex);
+    
+        // Находим склад для этого робота в СОВМЕЩЕННОМ слое
         const warehouse = this.currentElements.mergedWarehouses.find(w => w.layerIndex === robotData.layerIndex);
         if (!warehouse) {
             console.log('No warehouse found for robot:', robotData.layerIndex);
             return null;
         }
-
-        // Находим узел склада
-        const warehouseNode = this.findMergedNode(warehouse.element, robotData.layerIndex, this.currentLayer);
+    
+        // Используем узел склада из совмещенного слоя
+        let warehouseNode = warehouse.node;
+        if (!warehouseNode) {
+            warehouseNode = this.findMergedNode(warehouse.element, robotData.layerIndex, this.currentLayer);
+            if (warehouseNode) {
+                warehouse.node = warehouseNode;
+            }
+        }
+    
         if (!warehouseNode) {
             console.log('No warehouse node found for robot:', robotData.layerIndex);
             return null;
         }
-
-        // Находим посты для этого слоя
-        const layerPosts = this.currentElements.posts.filter(post =>
-            post.layerIndex === robotData.layerIndex && post.node
+    
+        // Находим посты для этого слоя в СОВМЕЩЕННОМ слое
+        const layerPosts = this.currentElements.posts.filter(post => 
+            post.layerIndex === robotData.layerIndex
         );
-
-        if (layerPosts.length === 0) {
-            console.log('No posts found for robot:', robotData.layerIndex);
+    
+        console.log('Found posts for robot', robotData.layerIndex, 'in merged layer:', layerPosts.length);
+    
+        // Убедимся, что у постов есть узлы
+        const postsWithNodes = [];
+        layerPosts.forEach(post => {
+            if (!post.node) {
+                post.node = this.findMergedNode(post.element, post.layerIndex, this.currentLayer);
+            }
+            if (post.node) {
+                postsWithNodes.push(post);
+            } else {
+                console.log('Could not find node for post in merged layer:', post.conveyor, post.number, 'layer:', robotData.layerIndex);
+            }
+        });
+    
+        if (postsWithNodes.length === 0) {
+            console.log('No posts with nodes found for robot:', robotData.layerIndex);
             return null;
         }
-
+    
         // Сортируем посты
-        const sortedPosts = [...layerPosts].sort((a, b) => {
+        const sortedPosts = [...postsWithNodes].sort((a, b) => {
             if (a.conveyor !== b.conveyor) return a.conveyor - b.conveyor;
             return a.number - b.number;
         });
-
+    
         console.log(`Created simulation data for robot ${robotData.layerIndex} with ${sortedPosts.length} posts`);
-
+    
+        // Узел робота - используем узел из совмещенного слоя
+        const robotNode = robotData.node;
+        if (!robotNode) {
+            console.log('No robot node found, using warehouse node as start');
+        }
+    
         return {
-            robotNode: warehouseNode, // Робот стартует со склада
+            robotNode: robotNode || warehouseNode, // Робот стартует со склада или своей позиции
             warehouseNode: warehouseNode,
             posts: sortedPosts,
             currentPostIndex: 0,
@@ -3085,7 +3279,6 @@ if (recreateNodesBtn) {
             warehouseStopTime: robotData.warehouseStopTime || 300
         };
     }
-
     async runIndependentRobotSimulation(robotData) {
         // Инициализируем статистику для робота
         const robotId = `robot-${robotData.layerIndex}`;
@@ -3097,57 +3290,60 @@ if (recreateNodesBtn) {
                 cyclesCompleted: 0
             };
         }
-
+    
         const stats = this.statistics.robots[robotId];
         const simData = robotData.simulationData;
-
+    
         if (!simData || simData.posts.length === 0) {
             console.log('No simulation data or posts for robot:', robotData.layerIndex);
             return;
         }
-
-        console.log(`Starting independent simulation for robot ${robotData.layerIndex}`);
-
+    
+        console.log(`Starting independent simulation for robot ${robotData.layerIndex} with ${simData.posts.length} posts`);
+    
         // Основной цикл симуляции для этого робота
         while (this.currentSimulation.running && !this.currentSimulation.paused) {
             // Посещаем все посты по порядку
             for (let i = 0; i < simData.posts.length; i++) {
                 if (!this.currentSimulation.running || this.currentSimulation.paused) break;
-
+    
                 const currentPost = simData.posts[i];
-
+    
                 if (!currentPost.node) {
                     console.log(`No node for post ${currentPost.conveyor}-${currentPost.number}, skipping`);
                     continue;
                 }
-
+    
                 console.log(`Robot ${robotData.layerIndex} moving to post ${currentPost.conveyor}-${currentPost.number}`);
-
+    
                 // Движение от склада к посту
                 const toPostPath = this.findShortestPath(simData.warehouseNode, currentPost.node);
                 if (toPostPath.length > 0) {
                     // Считаем расстояние до поста
                     const pathDistance = this.calculatePathDistance(toPostPath);
                     await this.moveRobotAlongPath(robotData, toPostPath);
-
+    
                     // Обновляем статистику расстояния
                     stats.distance += pathDistance;
+                } else {
+                    console.log(`No path found from warehouse to post for robot ${robotData.layerIndex}`);
+                    break;
                 }
-
+    
                 if (this.currentSimulation.running && !this.currentSimulation.paused) {
                     // Остановка на посту
                     console.log(`Robot ${robotData.layerIndex} stopping at post ${currentPost.conveyor}-${currentPost.number}`);
-
+    
                     // Учитываем ВСЕ настройки скорости для времени остановки
                     const actualPostStopTime = (simData.postStopTime * 1000) /
                         (this.timeSettings.globalSpeed * this.timeSettings.robotSpeed);
                     await this.delay(actualPostStopTime);
-
+    
                     // Обновляем статистику посещений постов
                     stats.postsVisited++;
                     currentPost.visited = true;
                 }
-
+    
                 if (this.currentSimulation.running && !this.currentSimulation.paused) {
                     // Возврат на склад
                     const toWarehousePath = this.findShortestPath(currentPost.node, simData.warehouseNode);
@@ -3155,48 +3351,47 @@ if (recreateNodesBtn) {
                         // Считаем расстояние обратно на склад
                         const returnDistance = this.calculatePathDistance(toWarehousePath);
                         await this.moveRobotAlongPath(robotData, toWarehousePath);
-
+    
                         // Обновляем статистику расстояния
                         stats.distance += returnDistance;
                     }
-
+    
                     // Остановка на складе
                     console.log(`Robot ${robotData.layerIndex} stopping at warehouse`);
-
+    
                     // Учитываем ВСЕ настройки скорости для времени остановки на складе
                     const actualWarehouseStopTime = (simData.warehouseStopTime * 1000) /
                         (this.timeSettings.globalSpeed * this.timeSettings.robotSpeed);
                     await this.delay(actualWarehouseStopTime);
-
+    
                     // Обновляем статистику доставок
                     stats.deliveries++;
                 }
-
+    
                 // Обновляем отображение статистики после каждого поста
                 this.updateStatisticsDisplay();
             }
-
+    
             // Завершили полный цикл (все посты)
             stats.cyclesCompleted++;
-
+    
             // Обновляем статистику после завершения цикла
             this.updateStatisticsDisplay();
-
+    
             console.log(`Robot ${robotData.layerIndex} completed cycle ${stats.cyclesCompleted}. ` +
                 `Total: ${stats.deliveries} deliveries, ${stats.distance.toFixed(1)}m distance`);
-
+    
             // Если симуляция все еще работает, начинаем новый цикл
             if (this.currentSimulation.running && !this.currentSimulation.paused) {
                 console.log(`Robot ${robotData.layerIndex} starting new cycle`);
             }
         }
-
+    
         console.log(`Robot ${robotData.layerIndex} simulation ended. Final stats: ` +
             `${stats.deliveries} deliveries, ${stats.distance.toFixed(1)}m distance, ` +
             `${stats.cyclesCompleted} cycles completed`);
         simData.isMoving = false;
     }
-
     // Добавьте метод для расчета расстояния пути
     calculatePathDistance(path) {
         let totalDistance = 0;
@@ -3311,36 +3506,64 @@ if (recreateNodesBtn) {
             alert('Нет роботов для симуляции!');
             return;
         }
-
+    
+        // Проверяем, что все посты имеют узлы
+        const postsWithoutNodes = this.currentElements.posts.filter(post => !post.node);
+        if (postsWithoutNodes.length > 0) {
+            console.log('Found posts without nodes, attempting to fix...', postsWithoutNodes.length);
+            this.restoreConnectionsForMergedLayer();
+        }
+    
+        // Проверяем еще раз
+        const stillMissingNodes = this.currentElements.posts.filter(post => !post.node);
+        if (stillMissingNodes.length > 0) {
+            console.log('Still missing nodes for posts:', stillMissingNodes.length);
+            // Создаем узлы для отсутствующих постов
+            stillMissingNodes.forEach(post => {
+                const newNode = this.placePathNode(post.x, post.y);
+                newNode.layerIndex = post.layerIndex;
+                post.node = newNode;
+                console.log('Created new node for post at', post.x, post.y);
+            });
+        }
+    
         this.currentSimulation.running = true;
         this.currentSimulation.paused = false;
-
+    
         // Сбрасываем всех роботов на их склады
         this.resetAllMergedRobotsToWarehouses();
-
+    
         let activeRobots = 0;
-
+    
+        console.log('Starting merged simulation for', this.currentElements.mergedRobots.length, 'robots');
+    
         // Запускаем независимые симуляции для каждого робота
         this.currentElements.mergedRobots.forEach(robotData => {
+            console.log('Creating simulation data for robot:', robotData.layerIndex);
             const simulationData = this.createIndependentSimulationData(robotData);
-            if (simulationData) {
+            if (simulationData && simulationData.posts.length > 0) {
                 robotData.simulationData = simulationData;
                 robotData.simulationData.currentPostIndex = 0;
                 robotData.simulationData.isMoving = false;
                 activeRobots++;
-
+    
+                console.log('Starting simulation for robot:', robotData.layerIndex, 'with', simulationData.posts.length, 'posts');
+                
                 // Запускаем симуляцию для этого робота
                 this.runIndependentRobotSimulation(robotData);
+            } else {
+                console.log('No valid simulation data for robot:', robotData.layerIndex);
             }
         });
-
+    
         if (activeRobots === 0) {
-            alert('Нет роботов с валидными маршрутами для симуляции!');
+            alert('Нет роботов с валидными маршрутами для симуляции! Проверьте узлы пути и связи постов.');
             this.currentSimulation.running = false;
             return;
         }
-
+    
         this.updateStatus(`Совмещенная симуляция запущена для ${activeRobots} роботов`);
+        console.log('Merged simulation started successfully for', activeRobots, 'robots');
     }
 
     async runSingleMergedRobot(robotData) {
@@ -3654,23 +3877,103 @@ if (recreateNodesBtn) {
     }
 
     findClosestNode(element) {
-        const rect = element.getBoundingClientRect();
-        const workshopRect = this.workshop.getBoundingClientRect();
-        const x = rect.left - workshopRect.left + rect.width / 2;
-        const y = rect.top - workshopRect.top + rect.height / 2;
+        if (!element) return null;
+
+        let elementX, elementY;
+
+        // Получаем координаты разными способами
+        if (element.style && element.style.left && element.style.top) {
+            elementX = parseFloat(element.style.left);
+            elementY = parseFloat(element.style.top);
+        } else if (element.x !== undefined && element.y !== undefined) {
+            elementX = element.x;
+            elementY = element.y;
+        } else if (element.getBoundingClientRect) {
+            const rect = element.getBoundingClientRect();
+            const workshopRect = this.workshop.getBoundingClientRect();
+            elementX = rect.left - workshopRect.left + rect.width / 2;
+            elementY = rect.top - workshopRect.top + rect.height / 2;
+        } else {
+            return null;
+        }
 
         let closestNode = null;
         let minDistance = Infinity;
+        const searchRadius = this.config.workshop.scale * 2; // Увеличиваем радиус поиска
 
         this.currentElements.pathNodes.forEach(node => {
-            const distance = Math.sqrt(Math.pow(node.x - x, 2) + Math.pow(node.y - y, 2));
-            if (distance < minDistance) {
+            const distance = Math.sqrt(
+                Math.pow(node.x - elementX, 2) + Math.pow(node.y - elementY, 2)
+            );
+
+            if (distance < minDistance && distance < searchRadius) {
                 minDistance = distance;
                 closestNode = node;
             }
         });
 
+        if (closestNode) {
+            console.log('Found closest node at distance:', minDistance, 'for element at:', elementX, elementY);
+        } else {
+            console.warn('No node found for element at:', elementX, elementY, 'within radius:', searchRadius);
+        }
+
         return closestNode;
+    }
+
+    validateRoutes() {
+        console.log('=== VALIDATING ROUTES ===');
+
+        Object.values(this.layers).forEach(layer => {
+            if (layer.id.startsWith('merged-')) return;
+
+            const elements = layer.elements;
+            let isValid = true;
+            let issues = [];
+
+            // Проверяем основные элементы
+            if (!elements.robot) {
+                issues.push('No robot');
+                isValid = false;
+            }
+            if (!elements.warehouse) {
+                issues.push('No warehouse');
+                isValid = false;
+            }
+            if (elements.posts.length === 0) {
+                issues.push('No posts');
+                isValid = false;
+            }
+
+            // Проверяем узлы
+            if (elements.robot && !elements.robot.node) {
+                issues.push('Robot has no node');
+                isValid = false;
+            }
+            if (elements.warehouse && !elements.warehouse.node) {
+                issues.push('Warehouse has no node');
+                isValid = false;
+            }
+
+            const postsWithoutNodes = elements.posts.filter(post => !post.node);
+            if (postsWithoutNodes.length > 0) {
+                issues.push(`${postsWithoutNodes.length} posts without nodes`);
+                isValid = false;
+            }
+
+            // Проверяем маршрут
+            if (layer.simulation.postsToVisit.length === 0) {
+                issues.push('No route generated');
+                isValid = false;
+            }
+
+            console.log(`Layer ${layer.id}: ${isValid ? 'VALID' : 'INVALID'}`, issues);
+
+            if (!isValid && issues.length > 0) {
+                console.log('Attempting to fix issues...');
+                this.generateAutoRouteForLayer(layer);
+            }
+        });
     }
 
     delay(ms) {
@@ -3837,9 +4140,9 @@ if (recreateNodesBtn) {
             currentLayerId: this.currentLayerId,
             timestamp: new Date().toISOString()
         };
-    
+
         console.log('Saving configuration:', saveData);
-    
+
         fetch('save_config.php', {
             method: 'POST',
             headers: {
@@ -3847,18 +4150,18 @@ if (recreateNodesBtn) {
             },
             body: JSON.stringify(saveData)
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Конфигурация успешно сохранена!');
-            } else {
-                alert('Ошибка при сохранении: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Ошибка сохранения:', error);
-            alert('Ошибка при сохранении конфигурации');
-        });
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Конфигурация успешно сохранена!');
+                } else {
+                    alert('Ошибка при сохранении: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка сохранения:', error);
+                alert('Ошибка при сохранении конфигурации');
+            });
     }
 
     loadConfiguration() {
@@ -3884,21 +4187,21 @@ if (recreateNodesBtn) {
             alert('Некорректные данные конфигурации');
             return;
         }
-    
+
         // Останавливаем текущую симуляцию
         this.stopSimulation();
-    
+
         // Сохраняем текущий ID слоя
         const previousLayerId = this.currentLayerId;
-    
+
         // Полностью очищаем все слои
         this.layers = {};
         this.layerCounter = 0;
-    
+
         // Воссоздаем структуру слоев
         Object.keys(data.layers).forEach(layerId => {
             const layerData = data.layers[layerId];
-            
+
             this.layers[layerId] = {
                 id: layerId,
                 name: layerData.name,
@@ -3925,47 +4228,53 @@ if (recreateNodesBtn) {
                 }
             };
         });
-    
+
         // Устанавливаем счетчик слоев
         this.layerCounter = Object.keys(this.layers).length;
-    
+
         // Переключаемся на сохраненный слой или первый доступный
         this.currentLayerId = data.currentLayerId || Object.keys(this.layers)[0] || 'layer-0';
-    
+
         // Очищаем workshop
         this.workshop.innerHTML = '';
-        
+
         // Восстанавливаем snap points
         this.createSnapPoints();
-    
+
         // Восстанавливаем элементы для каждого слоя
         Object.keys(data.layers).forEach(layerId => {
             this.restoreLayerElements(layerId, data.layers[layerId].elements);
         });
-    
+
         // Переключаемся на целевой слой (это перерисует элементы)
         this.switchLayer(this.currentLayerId);
-    
+
+        // ВОССТАНАВЛИВАЕМ СВЯЗИ И МАРШРУТЫ ПОСЛЕ ЗАГРУЗКИ
+        setTimeout(() => {
+            this.restoreConnectionsAfterLoad();
+        }, 500);
+
         // Обновляем UI
         this.updateLayerSelect();
         this.updateLayerDisplay();
-    
+
         console.log('Configuration loaded successfully for layer:', this.currentLayerId);
         this.updateStatus('Конфигурация успешно загружена');
     }
+
     restoreLayerElements(layerId, elementsData) {
         const layer = this.layers[layerId];
         if (!layer) {
             console.error('Layer not found:', layerId);
             return;
         }
-    
+
         console.log('Restoring elements for layer:', layerId, elementsData);
-    
+
         // Временно переключаемся на этот слой для восстановления элементов
         const previousLayerId = this.currentLayerId;
         this.currentLayerId = layerId;
-    
+
         // Инициализируем массивы для совмещенных элементов
         if (!this.currentElements.mergedRobots) {
             this.currentElements.mergedRobots = [];
@@ -3973,16 +4282,16 @@ if (recreateNodesBtn) {
         if (!this.currentElements.mergedWarehouses) {
             this.currentElements.mergedWarehouses = [];
         }
-    
+
         // Восстанавливаем обычные элементы (для обычных слоев)
         if (elementsData.robot && !layerId.startsWith('merged-')) {
             this.restoreRobot(elementsData.robot);
         }
-    
+
         if (elementsData.warehouse && !layerId.startsWith('merged-')) {
             this.restoreWarehouse(elementsData.warehouse);
         }
-    
+
         // Восстанавливаем совмещенные элементы (для совмещенных слоев)
         if (elementsData.mergedRobots && layerId.startsWith('merged-')) {
             console.log('Restoring merged robots:', elementsData.mergedRobots.length);
@@ -3990,64 +4299,173 @@ if (recreateNodesBtn) {
                 this.restoreMergedRobot(robotData);
             });
         }
-    
+
         if (elementsData.mergedWarehouses && layerId.startsWith('merged-')) {
             console.log('Restoring merged warehouses:', elementsData.mergedWarehouses.length);
             elementsData.mergedWarehouses.forEach(warehouseData => {
                 this.restoreMergedWarehouse(warehouseData);
             });
         }
-    
+
         // Восстанавливаем общие элементы
         if (elementsData.posts && elementsData.posts.length > 0) {
             elementsData.posts.forEach(postData => {
                 this.restorePost(postData);
             });
         }
-    
+
         if (elementsData.pathNodes && elementsData.pathNodes.length > 0) {
             elementsData.pathNodes.forEach(nodeData => {
                 this.restorePathNode(nodeData);
             });
         }
-    
+
         if (elementsData.conveyors && elementsData.conveyors.length > 0) {
             this.restoreConveyors(elementsData.conveyors);
         }
-    
+
         if (elementsData.pathLines && elementsData.pathLines.length > 0) {
             elementsData.pathLines.forEach(lineData => {
                 this.restorePathLine(lineData);
             });
         }
-    
+
         // Возвращаемся к предыдущему слою
         this.currentLayerId = previousLayerId;
     }
+
+    restoreConnectionsForMergedLayer() {
+        console.log('=== RESTORING CONNECTIONS FOR MERGED LAYER ===');
+        
+        // Восстанавливаем связи постов с узлами
+        this.currentElements.posts.forEach(post => {
+            if (!post.node) {
+                const postNode = this.findMergedNode(post.element, post.layerIndex, this.currentLayer);
+                if (postNode) {
+                    post.node = postNode;
+                    console.log('Restored connection for merged post at', post.x, post.y, 'to node at', postNode.x, postNode.y);
+                } else {
+                    // Создаем новый узел, если не нашли существующий
+                    console.log('Creating new node for post at', post.x, post.y);
+                    const newNode = this.placePathNode(post.x, post.y);
+                    newNode.layerIndex = post.layerIndex;
+                    post.node = newNode;
+                    console.log('Created new node for post at', post.x, post.y);
+                }
+            }
+        });
+    
+        // Восстанавливаем связи роботов с узлами
+        if (this.currentElements.mergedRobots) {
+            this.currentElements.mergedRobots.forEach(robot => {
+                if (!robot.node) {
+                    const robotNode = this.findMergedNode(robot.element, robot.layerIndex, this.currentLayer);
+                    if (robotNode) {
+                        robot.node = robotNode;
+                        console.log('Restored connection for merged robot to node at', robotNode.x, robotNode.y);
+                    } else {
+                        // Создаем новый узел для робота
+                        const robotX = parseFloat(robot.element.style.left);
+                        const robotY = parseFloat(robot.element.style.top);
+                        const newNode = this.placePathNode(robotX, robotY);
+                        newNode.layerIndex = robot.layerIndex;
+                        robot.node = newNode;
+                        console.log('Created new node for merged robot at', robotX, robotY);
+                    }
+                }
+            });
+        }
+    
+        // Восстанавливаем связи складов с узлами
+        if (this.currentElements.mergedWarehouses) {
+            this.currentElements.mergedWarehouses.forEach(warehouse => {
+                if (!warehouse.node) {
+                    const warehouseNode = this.findMergedNode(warehouse.element, warehouse.layerIndex, this.currentLayer);
+                    if (warehouseNode) {
+                        warehouse.node = warehouseNode;
+                        console.log('Restored connection for merged warehouse to node at', warehouseNode.x, warehouseNode.y);
+                    } else {
+                        // Создаем новый узел для склада
+                        const newNode = this.placePathNode(warehouse.x, warehouse.y);
+                        newNode.layerIndex = warehouse.layerIndex;
+                        warehouse.node = newNode;
+                        console.log('Created new node for merged warehouse at', warehouse.x, warehouse.y);
+                    }
+                }
+            });
+        }
+    
+        console.log('Merged layer connections restoration completed');
+    }
+
+    restoreConnectionsAfterLoad() {
+        console.log('=== RESTORING CONNECTIONS AFTER LOAD ===');
+        
+        // Восстанавливаем связи постов с узлами
+        this.currentElements.posts.forEach(post => {
+            if (!post.node) {
+                const closestNode = this.findClosestNode(post.element);
+                if (closestNode) {
+                    post.node = closestNode;
+                    console.log('Restored connection for post at', post.x, post.y, 'to node at', closestNode.x, closestNode.y);
+                }
+            }
+        });
+    
+        // Восстанавливаем связи робота и склада с узлами
+        if (this.currentElements.robot && !this.currentElements.robot.node) {
+            this.currentElements.robot.node = this.findClosestNode(this.currentElements.robot);
+            if (this.currentElements.robot.node) {
+                console.log('Restored connection for robot to node at', this.currentElements.robot.node.x, this.currentElements.robot.node.y);
+            }
+        }
+    
+        if (this.currentElements.warehouse && !this.currentElements.warehouse.node) {
+            this.currentElements.warehouse.node = this.findClosestNode(this.currentElements.warehouse);
+            if (this.currentElements.warehouse.node) {
+                console.log('Restored connection for warehouse to node at', this.currentElements.warehouse.node.x, this.currentElements.warehouse.node.y);
+            }
+        }
+    
+        // ДОБАВЛЯЕМ ВОССТАНОВЛЕНИЕ ДЛЯ СОВМЕЩЕННОГО СЛОЯ
+        if (this.currentLayerId.startsWith('merged-')) {
+            this.restoreConnectionsForMergedLayer();
+        }
+    
+        // Генерируем маршруты для всех слоев
+        Object.values(this.layers).forEach(layer => {
+            if (!layer.id.startsWith('merged-')) {
+                this.generateAutoRouteForLayer(layer);
+            }
+        });
+    
+        console.log('Connections restoration completed');
+    }
+
     restoreMergedRobot(robotData) {
         console.log('Restoring merged robot:', robotData);
-    
+
         const robot = document.createElement('div');
         robot.className = 'element robot robot-merged';
         robot.style.left = robotData.x + 'px';
         robot.style.top = robotData.y + 'px';
         robot.style.width = '40px';
         robot.style.height = '40px';
-        
+
         // Используем сохраненный цвет или генерируем новый
         const color = robotData.color || this.getColorByLayerIndex(robotData.layerIndex);
         robot.style.border = `3px solid ${color}`;
         robot.style.borderRadius = '50%';
         robot.style.zIndex = 20 + (robotData.layerIndex || 0);
         robot.style.background = 'rgba(255, 255, 255, 0.8)';
-    
+
         // Используем соответствующее изображение
         const robotImage = robotData.type === 'bigRobot'
             ? this.config.images.bigRobot
             : this.config.images.robot;
-    
+
         robot.innerHTML = `<img src="${robotImage}" alt="Робот" style="width:100%;height:100%;border-radius:50%;">`;
-    
+
         const label = document.createElement('div');
         label.className = 'robot-label';
         label.textContent = `Робот ${(robotData.layerIndex || 0) + 1} (С${(robotData.layerIndex || 0) + 1})`;
@@ -4063,7 +4481,7 @@ if (recreateNodesBtn) {
             z-index: 30;
             font-weight: bold;
         `;
-    
+
         const info = document.createElement('div');
         info.className = 'robot-info';
         info.textContent = `v=${robotData.speed || 0.6}m/s`;
@@ -4078,7 +4496,11 @@ if (recreateNodesBtn) {
             z-index: 11;
             white-space: nowrap;
         `;
-    
+
+        // СОЗДАЕМ УЗЕЛ ДЛЯ РОБОТА
+        const robotNode = this.placePathNode(robotData.x, robotData.y);
+        robotNode.layerIndex = robotData.layerIndex;
+
         const robotObj = {
             element: robot,
             label: label,
@@ -4090,58 +4512,60 @@ if (recreateNodesBtn) {
             postStopTime: robotData.postStopTime || 30,
             warehouseStopTime: robotData.warehouseStopTime || 300,
             type: robotData.type || 'robot',
-            simulationData: null
+            simulationData: null,
+            node: robotNode // сохраняем узел
         };
-    
+
         this.workshop.appendChild(robot);
         this.workshop.appendChild(label);
         this.workshop.appendChild(info);
-    
+
         // Обновляем позиции
         this.updateRobotLabelPosition(robot, label);
         info.style.left = (robotData.x + 20) + 'px';
         info.style.top = (robotData.y - 15) + 'px';
-    
+
         // Инициализируем массив если его нет
         if (!this.currentElements.mergedRobots) {
             this.currentElements.mergedRobots = [];
         }
-        
+
         this.currentElements.mergedRobots.push(robotObj);
-        console.log('Merged robot restored successfully');
+        console.log('Merged robot restored successfully with node');
     }
 
     getColorByLayerIndex(layerIndex) {
         const colors = ['#007bff', '#dc3545', '#28a745', '#ffc107', '#17a2b8', '#6f42c1'];
         return colors[layerIndex % colors.length];
     }
-    
+
     restoreMergedWarehouse(warehouseData) {
         console.log('Restoring merged warehouse:', warehouseData);
-    
+
         const warehouse = document.createElement('div');
         warehouse.className = 'element warehouse';
         warehouse.style.left = warehouseData.x + 'px';
         warehouse.style.top = warehouseData.y + 'px';
         warehouse.innerHTML = `<img src="${this.config.images.warehouse}" alt="Склад" style="width:100%;height:100%;">`;
-    
+
         const warehouseObj = {
             element: warehouse,
             x: warehouseData.x,
             y: warehouseData.y,
             layerIndex: warehouseData.layerIndex || 0
         };
-    
+
         this.workshop.appendChild(warehouse);
-    
+
         // Инициализируем массив если его нет
         if (!this.currentElements.mergedWarehouses) {
             this.currentElements.mergedWarehouses = [];
         }
-        
+
         this.currentElements.mergedWarehouses.push(warehouseObj);
         console.log('Merged warehouse restored successfully');
     }
+
     restorePost(postData) {
         const post = document.createElement('div');
         post.className = 'element post';
@@ -4178,15 +4602,33 @@ if (recreateNodesBtn) {
             type: postData.type,
             conveyor: postData.conveyor,
             number: postData.number,
-            visited: false
+            visited: postData.visited || false,
+            layerIndex: postData.layerIndex // сохраняем layerIndex
         };
     
         this.currentElements.posts.push(postObj);
     
-        // Создаем узел для поста
-        const postNode = this.placePathNode(postData.x, postData.y);
-        postObj.node = postNode;
+        // ДЛЯ СОВМЕЩЕННОГО СЛОЯ ИЩЕМ УЗЕЛ ЧЕРЕЗ findMergedNode
+        if (this.currentLayerId.startsWith('merged-')) {
+            const postNode = this.findMergedNode(post, postData.layerIndex, this.currentLayer);
+            if (postNode) {
+                postObj.node = postNode;
+                console.log('Restored node for merged post:', postData.conveyor, postData.number, 'layer:', postData.layerIndex);
+            } else {
+                console.warn('Could not find node for merged post:', postData.conveyor, postData.number, 'layer:', postData.layerIndex);
+                // Создаем новый узел, если не нашли существующий
+                const newNode = this.placePathNode(postData.x, postData.y);
+                newNode.layerIndex = postData.layerIndex;
+                postObj.node = newNode;
+                console.log('Created new node for post:', postData.conveyor, postData.number);
+            }
+        } else {
+            // Для обычного слоя создаем узел
+            const postNode = this.placePathNode(postData.x, postData.y);
+            postObj.node = postNode;
+        }
     }
+
     restorePathNode(nodeData) {
         // Проверяем, существует ли уже узел в этой позиции
         const existingNode = this.currentElements.pathNodes.find(node => 
@@ -4204,7 +4646,9 @@ if (recreateNodesBtn) {
     
         node.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (this.selectedTool === 'path') {
+            if (this.deleteMode) {
+                this.removePathNode(node);
+            } else if (this.selectedTool === 'path') {
                 this.connectToNode(node);
             }
         });
@@ -4215,60 +4659,65 @@ if (recreateNodesBtn) {
             element: node,
             x: nodeData.x,
             y: nodeData.y,
-            connections: []
+            connections: [],
+            layerIndex: nodeData.layerIndex // ВОССТАНАВЛИВАЕМ layerIndex
         };
     
         this.currentElements.pathNodes.push(nodeObj);
         return nodeObj;
     }
-    restoreConveyors(conveyorsData) {
-        // Группируем конвейеры по systemId
-        const systems = {};
-        conveyorsData.forEach(conv => {
-            if (!systems[conv.systemId]) {
-                systems[conv.systemId] = [];
-            }
-            systems[conv.systemId].push(conv);
-        });
-        
-        // Восстанавливаем каждую систему конвейеров
-        Object.keys(systems).forEach(systemId => {
-            const segments = systems[systemId];
-            if (segments.length > 0) {
-                const firstSegment = segments[0];
-                this.createConveyorSystem(firstSegment.x, firstSegment.y, systemId, 5400000);
-            }
-        });
-    }
+restoreConveyors(conveyorsData) {
+    // Группируем конвейеры по systemId
+    const systems = {};
+    conveyorsData.forEach(conv => {
+        const systemId = conv.systemId || 'default-system-' + Date.now();
+        if (!systems[systemId]) {
+            systems[systemId] = [];
+        }
+        systems[systemId].push(conv);
+    });
+
+    // Восстанавливаем каждую систему конвейеров
+    Object.keys(systems).forEach(systemId => {
+        const segments = systems[systemId];
+        if (segments.length > 0) {
+            const firstSegment = segments[0];
+            // Используем сохраненное productionTime или значение по умолчанию
+            const productionTime = firstSegment.productionTime || 5400000;
+            this.createConveyorSystem(firstSegment.x, firstSegment.y, systemId, productionTime);
+            console.log('Restored conveyor system:', systemId, 'with', segments.length, 'segments');
+        }
+    });
+}
     restorePathLine(lineData) {
         // Находим начальный и конечный узлы
-        const startNode = this.currentElements.pathNodes.find(node => 
+        const startNode = this.currentElements.pathNodes.find(node =>
             Math.abs(node.x - lineData.startX) < 5 && Math.abs(node.y - lineData.startY) < 5
         );
-        
-        const endNode = this.currentElements.pathNodes.find(node => 
+
+        const endNode = this.currentElements.pathNodes.find(node =>
             Math.abs(node.x - lineData.endX) < 5 && Math.abs(node.y - lineData.endY) < 5
         );
-    
+
         if (!startNode || !endNode) {
             console.warn('Could not find nodes for path line:', lineData);
             return;
         }
-    
+
         // Создаем линию
         const line = document.createElement('div');
         line.className = 'path-line';
-    
+
         const visualLength = Math.sqrt(
             Math.pow(endNode.x - startNode.x, 2) + Math.pow(endNode.y - startNode.y, 2)
         );
         const angle = Math.atan2(endNode.y - startNode.y, endNode.x - startNode.x) * 180 / Math.PI;
-    
+
         line.style.width = visualLength + 'px';
         line.style.left = startNode.x + 'px';
         line.style.top = startNode.y + 'px';
         line.style.transform = `rotate(${angle}deg)`;
-    
+
         // ДОБАВЛЯЕМ ОБРАБОТЧИК ДЛЯ УДАЛЕНИЯ ЛИНИЙ
         line.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -4277,23 +4726,23 @@ if (recreateNodesBtn) {
                 this.removePathLine(line);
             }
         });
-    
+
         this.workshop.appendChild(line);
-    
+
         // Создаем соединение
         const connectionData = {
             node: endNode,
             lineElement: line,
             length: lineData.length
         };
-    
+
         startNode.connections.push(connectionData);
         endNode.connections.push({
             node: startNode,
             lineElement: line,
             length: lineData.length
         });
-    
+
         const lineObj = {
             element: line,
             startNode: startNode,
@@ -4301,9 +4750,9 @@ if (recreateNodesBtn) {
             length: lineData.length,
             labelElement: null
         };
-    
+
         this.currentElements.pathLines.push(lineObj);
-    
+
         // Создаем label для линии
         this.updateLineLengthDisplay(lineObj);
     }
@@ -4314,10 +4763,10 @@ if (recreateNodesBtn) {
         warehouse.style.left = warehouseData.x + 'px';
         warehouse.style.top = warehouseData.y + 'px';
         warehouse.innerHTML = `<img src="${this.config.images.warehouse}" alt="Склад" style="width:100%;height:100%;">`;
-    
+
         this.workshop.appendChild(warehouse);
         this.currentElements.warehouse = warehouse;
-    
+
         // Создаем узел для склада
         this.placePathNode(warehouseData.x, warehouseData.y);
     }
@@ -4326,17 +4775,17 @@ if (recreateNodesBtn) {
         robot.className = 'element robot';
         robot.style.left = robotData.x + 'px';
         robot.style.top = robotData.y + 'px';
-    
+
         const robotImage = robotData.type === 'bigRobot'
             ? this.config.images.bigRobot
             : this.config.images.robot;
-    
+
         robot.innerHTML = `<img src="${robotImage}" alt="Робот" style="width:100%;height:100%;">`;
         robot.dataset.robotType = robotData.type;
-    
+
         this.workshop.appendChild(robot);
         this.currentElements.robot = robot;
-    
+
         // Создаем информационный элемент
         const info = document.createElement('div');
         info.className = 'robot-info';
@@ -4354,16 +4803,16 @@ if (recreateNodesBtn) {
             z-index: 11;
             white-space: nowrap;
         `;
-    
+
         this.workshop.appendChild(info);
-    
+
         // Сохраняем данные робота
         this.currentElements.robot.speed = robotData.speed;
         this.currentElements.robot.postStopTime = robotData.postStopTime;
         this.currentElements.robot.warehouseStopTime = robotData.warehouseStopTime;
         this.currentElements.robot.infoElement = info;
         this.currentElements.robot.type = robotData.type;
-    
+
         // Создаем узел для робота
         this.placePathNode(robotData.x, robotData.y);
     }
