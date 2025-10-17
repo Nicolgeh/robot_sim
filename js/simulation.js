@@ -670,15 +670,25 @@ class RobotSimulation {
     setDeleteMode(mode) {
         this.deleteMode = mode;
         const deleteBtn = document.getElementById('delete-btn');
-
+    
         if (this.deleteMode) {
             deleteBtn.style.backgroundColor = '#ff0000';
             deleteBtn.textContent = 'Режим удаления (кликните на объект)';
             this.workshop.style.cursor = 'pointer';
+            
+            // Добавляем визуальную обратную связь для всех удаляемых элементов
+            document.querySelectorAll('.path-node, .path-line, .line-length').forEach(el => {
+                el.style.opacity = '0.8';
+            });
         } else {
             deleteBtn.style.backgroundColor = '#dc3545';
             deleteBtn.textContent = 'Удалить объекты';
             this.workshop.style.cursor = 'default';
+            
+            // Убираем визуальную обратную связь
+            document.querySelectorAll('.path-node, .path-line, .line-length').forEach(el => {
+                el.style.opacity = '1';
+            });
         }
     }
 
@@ -988,7 +998,7 @@ class RobotSimulation {
     toggleDeleteMode() {
         this.deleteMode = !this.deleteMode;
         this.setDeleteMode(this.deleteMode);
-
+    
         if (this.deleteMode) {
             this.selectedTool = null;
             document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
@@ -1378,32 +1388,36 @@ class RobotSimulation {
         const existingNode = this.currentElements.pathNodes.find(node =>
             Math.abs(node.x - x) < 5 && Math.abs(node.y - y) < 5
         );
-
+    
         if (existingNode) {
             return existingNode;
         }
-
+    
         const node = document.createElement('div');
         node.className = 'path-node';
         node.style.left = x + 'px';
         node.style.top = y + 'px';
-
+    
+        // ОБНОВЛЕННЫЙ ОБРАБОТЧИК - добавляем поддержку удаления
         node.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (this.selectedTool === 'path') {
+            if (this.deleteMode) {
+                console.log('Deleting path node in delete mode');
+                this.removePathNode(node);
+            } else if (this.selectedTool === 'path') {
                 this.connectToNode(node);
             }
         });
-
+    
         this.workshop.appendChild(node);
-
+    
         const nodeData = {
             element: node,
             x: x,
             y: y,
             connections: []
         };
-
+    
         this.currentElements.pathNodes.push(nodeData);
         return nodeData;
     }
@@ -1712,32 +1726,41 @@ class RobotSimulation {
     createConnection(node1, node2, customLength = null) {
         const line = document.createElement('div');
         line.className = 'path-line';
-
+    
         const visualLength = Math.sqrt(Math.pow(node2.x - node1.x, 2) + Math.pow(node2.y - node1.y, 2));
         const angle = Math.atan2(node2.y - node1.y, node2.x - node1.x) * 180 / Math.PI;
-
+    
         line.style.width = visualLength + 'px';
         line.style.left = node1.x + 'px';
         line.style.top = node1.y + 'px';
         line.style.transform = `rotate(${angle}deg)`;
-
+    
+        // ДОБАВЛЯЕМ ОБРАБОТЧИК ДЛЯ УДАЛЕНИЯ ЛИНИЙ
+        line.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (this.deleteMode) {
+                console.log('Deleting path line in delete mode');
+                this.removePathLine(line);
+            }
+        });
+    
         this.workshop.appendChild(line);
-
+    
         const connectionLength = customLength || (visualLength / this.config.workshop.scale);
-
+    
         const connectionData = {
             node: node2,
             lineElement: line,
             length: connectionLength
         };
-
+    
         node1.connections.push(connectionData);
         node2.connections.push({
             node: node1,
             lineElement: line,
             length: connectionLength
         });
-
+    
         const lineData = {
             element: line,
             startNode: node1,
@@ -1745,9 +1768,9 @@ class RobotSimulation {
             length: connectionLength,
             labelElement: null
         };
-
+    
         this.currentElements.pathLines.push(lineData);
-
+    
         this.updateLineLengthDisplay(lineData);
     }
 
@@ -1810,19 +1833,25 @@ class RobotSimulation {
         if (lineData.labelElement && lineData.labelElement.parentNode) {
             this.workshop.removeChild(lineData.labelElement);
         }
-
+    
         const label = document.createElement('div');
         label.className = 'line-length';
         label.textContent = lineData.length.toFixed(1) + 'м';
         label.style.left = (lineData.startNode.x + (lineData.endNode.x - lineData.startNode.x) / 2) + 'px';
         label.style.top = (lineData.startNode.y + (lineData.endNode.y - lineData.startNode.y) / 2) + 'px';
         label.style.cursor = 'pointer';
-
+    
+        // ОБНОВЛЕННЫЙ ОБРАБОТЧИК - добавляем поддержку удаления
         label.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.editLineLengthFromLabel(label);
+            if (this.deleteMode) {
+                console.log('Deleting path line via label in delete mode');
+                this.removePathLine(lineData.element);
+            } else {
+                this.editLineLengthFromLabel(label);
+            }
         });
-
+    
         this.workshop.appendChild(label);
         lineData.labelElement = label;
     }
@@ -3961,6 +3990,15 @@ class RobotSimulation {
         line.style.left = startNode.x + 'px';
         line.style.top = startNode.y + 'px';
         line.style.transform = `rotate(${angle}deg)`;
+    
+        // ДОБАВЛЯЕМ ОБРАБОТЧИК ДЛЯ УДАЛЕНИЯ ЛИНИЙ
+        line.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (this.deleteMode) {
+                console.log('Deleting restored path line in delete mode');
+                this.removePathLine(line);
+            }
+        });
     
         this.workshop.appendChild(line);
     
