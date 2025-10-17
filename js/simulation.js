@@ -716,20 +716,33 @@ class RobotSimulation {
         const snapY = Math.round(y / gridSize) * gridSize;
         return { x: snapX, y: snapY };
     }
+    debugPathNodes() {
+        console.log('=== DEBUG PATH NODES ===');
+        console.log('Total nodes:', this.currentElements.pathNodes.length);
+        
+        this.currentElements.pathNodes.forEach((node, index) => {
+            console.log(`Node ${index}:`, {
+                x: node.x,
+                y: node.y,
+                isManual: node.isManual || false,
+                connections: node.connections.length,
+                element: node.element
+            });
+        });
+        
+        console.log('=== END DEBUG ===');
+    }
 
     setupEventListeners() {
-        const debugNodesBtn = document.getElementById('debug-nodes-btn');
-        if (debugNodesBtn) {
-            debugNodesBtn.addEventListener('click', () => this.debugNodes());
-        }
-        const debugPositionsBtn = document.getElementById('debug-positions-btn');
-        if (debugPositionsBtn) {
-            debugPositionsBtn.addEventListener('click', () => this.debugElementPositions());
-        }
-        const debugBtn = document.getElementById('debug-btn');
-        if (debugBtn) {
-            debugBtn.addEventListener('click', () => this.debugMergedLayers());
-        }
+        const checkNodesBtn = document.getElementById('check-nodes-btn');
+if (checkNodesBtn) {
+    checkNodesBtn.addEventListener('click', () => this.checkAndFixNodes());
+}
+
+const recreateNodesBtn = document.getElementById('recreate-nodes-btn');
+if (recreateNodesBtn) {
+    recreateNodesBtn.addEventListener('click', () => this.recreateAllNodes());
+}
         const controlButtons = ['save-btn', 'load-btn', 'start-btn', 'stop-btn', 'resume-btn', 'reset-btn', 'delete-btn', 'auto-route-btn'];
 
         controlButtons.forEach(btnId => {
@@ -1010,23 +1023,28 @@ class RobotSimulation {
         }
     }
     handleWorkshopClick(e) {
+        console.log('Workshop clicked - target:', e.target.className, 'delete mode:', this.deleteMode);
+        
         if (this.deleteMode) {
             this.handleDelete(e);
             return;
         }
-
-        if (!this.selectedTool) return;
-
+    
+        if (!this.selectedTool) {
+            console.log('No tool selected');
+            return;
+        }
+    
         const rect = this.workshop.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-
+    
         const snapPoint = this.findClosestSnapPoint(x, y);
         const finalX = snapPoint.x;
         const finalY = snapPoint.y;
-
+    
         console.log('Placing element:', this.selectedTool, 'at', finalX, finalY);
-
+    
         switch (this.selectedTool) {
             case 'robot':
                 this.placeRobot(finalX, finalY, 'robot');
@@ -1056,9 +1074,13 @@ class RobotSimulation {
     }
 
     handlePathToolClick(e) {
+        console.log('Path tool click - target:', e.target.className);
         const clickedNode = e.target.closest('.path-node');
         if (clickedNode) {
+            console.log('Found path node for connection');
             this.connectToNode(clickedNode);
+        } else {
+            console.log('No path node found for connection');
         }
     }
 
@@ -1395,14 +1417,22 @@ class RobotSimulation {
     
         const node = document.createElement('div');
         node.className = 'path-node';
+        
+        // ПРОСТОЕ ПОЗИЦИОНИРОВАНИЕ БЕЗ СЛОЖНЫХ TRANSFORM
         node.style.left = x + 'px';
         node.style.top = y + 'px';
     
-        // ОБНОВЛЕННЫЙ ОБРАБОТЧИК - добавляем поддержку удаления
+        // УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК
         node.addEventListener('click', (e) => {
             e.stopPropagation();
+            console.log('Path node clicked', {
+                deleteMode: this.deleteMode,
+                selectedTool: this.selectedTool,
+                nodePosition: {x, y}
+            });
+            
             if (this.deleteMode) {
-                console.log('Deleting path node in delete mode');
+                console.log('Attempting to delete node');
                 this.removePathNode(node);
             } else if (this.selectedTool === 'path') {
                 this.connectToNode(node);
@@ -1419,7 +1449,38 @@ class RobotSimulation {
         };
     
         this.currentElements.pathNodes.push(nodeData);
+        
+        console.log('Path node created successfully at:', x, y);
         return nodeData;
+    }
+    updatePathNodesEventHandlers() {
+        console.log('Updating event handlers for all path nodes');
+        
+        this.currentElements.pathNodes.forEach(nodeData => {
+            const node = nodeData.element;
+            
+            // Удаляем старые обработчики
+            node.replaceWith(node.cloneNode(true));
+            const newNode = node.parentNode.lastElementChild;
+            
+            // Добавляем новые обработчики
+            newNode.addEventListener('click', (e) => {
+                e.stopPropagation();
+                console.log('Path node clicked (updated handler), delete mode:', this.deleteMode);
+                
+                if (this.deleteMode) {
+                    console.log('Deleting path node with updated handler');
+                    this.removePathNode(newNode);
+                } else if (this.selectedTool === 'path') {
+                    this.connectToNode(newNode);
+                }
+            });
+            
+            // Обновляем ссылку в данных
+            nodeData.element = newNode;
+        });
+        
+        console.log('Event handlers updated for', this.currentElements.pathNodes.length, 'nodes');
     }
 
     openPostModal(defaultNumber = 1, type = 'post') {
@@ -1595,27 +1656,33 @@ class RobotSimulation {
     }
 
     removePathNode(nodeElement) {
-        console.log('Attempting to remove path node');
-
+        console.log('=== START removePathNode ===');
+        console.log('Node element:', nodeElement);
+        console.log('Current path nodes count:', this.currentElements.pathNodes.length);
+    
         const nodeIndex = this.currentElements.pathNodes.findIndex(n => n.element === nodeElement);
+        console.log('Found node index:', nodeIndex);
+    
         if (nodeIndex === -1) {
             console.log('Node not found in current elements');
             return;
         }
-
+    
         const node = this.currentElements.pathNodes[nodeIndex];
         console.log('Removing path node with', node.connections.length, 'connections');
-
+    
         // Создаем копию соединений для безопасного удаления
         const connectionsToRemove = [...node.connections];
-
-        connectionsToRemove.forEach(connection => {
+        console.log('Connections to remove:', connectionsToRemove.length);
+    
+        connectionsToRemove.forEach((connection, index) => {
+            console.log(`Processing connection ${index + 1}/${connectionsToRemove.length}`);
             const connectedNode = connection.node;
             if (connectedNode) {
                 console.log('Removing connection from connected node');
                 // Удаляем соединение из связанного узла
                 connectedNode.connections = connectedNode.connections.filter(c => c.lineElement !== connection.lineElement);
-
+    
                 // Удаляем линию
                 const lineElement = connection.lineElement;
                 if (lineElement && lineElement.parentNode) {
@@ -1635,7 +1702,7 @@ class RobotSimulation {
                 }
             }
         });
-
+    
         // Удаляем узел
         if (node.element.parentNode) {
             this.workshop.removeChild(node.element);
@@ -1643,7 +1710,7 @@ class RobotSimulation {
         }
         this.currentElements.pathNodes.splice(nodeIndex, 1);
         console.log('Node removed from array');
-
+    
         // Обновляем ссылки на узлы в постах
         this.currentElements.posts.forEach(post => {
             if (post.node === node) {
@@ -1651,8 +1718,94 @@ class RobotSimulation {
                 console.log('Cleared node reference from post');
             }
         });
+    
+        console.log('Remaining path nodes:', this.currentElements.pathNodes.length);
+        console.log('=== END removePathNode ===');
+    }
 
-        console.log('Path node removal completed');
+    removePathNode(nodeElement) {
+        console.log('=== START removePathNode ===');
+        
+        // Проверяем, что элемент существует
+        if (!nodeElement) {
+            console.log('No node element provided');
+            return;
+        }
+        
+        // Проверяем, что элемент в DOM
+        if (!nodeElement.parentNode) {
+            console.log('Node element already removed from DOM');
+            // Но все равно удаляем из массива
+            this.currentElements.pathNodes = this.currentElements.pathNodes.filter(
+                n => n.element !== nodeElement
+            );
+            return;
+        }
+    
+        const nodeIndex = this.currentElements.pathNodes.findIndex(n => n.element === nodeElement);
+        console.log('Found node index:', nodeIndex, 'Total nodes:', this.currentElements.pathNodes.length);
+    
+        if (nodeIndex === -1) {
+            console.log('Node not found in array, but removing from DOM');
+            nodeElement.remove();
+            return;
+        }
+    
+        const node = this.currentElements.pathNodes[nodeIndex];
+        console.log('Removing node with', node.connections.length, 'connections');
+    
+        // Удаляем все соединения этого узла
+        const connectionsToRemove = [...node.connections];
+        
+        connectionsToRemove.forEach((connection, index) => {
+            console.log(`Removing connection ${index + 1}/${connectionsToRemove.length}`);
+            
+            if (connection.node && connection.node.connections) {
+                // Удаляем обратную ссылку из связанного узла
+                connection.node.connections = connection.node.connections.filter(
+                    conn => conn.lineElement !== connection.lineElement
+                );
+            }
+    
+            // Удаляем линию
+            if (connection.lineElement) {
+                const lineIndex = this.currentElements.pathLines.findIndex(
+                    line => line.element === connection.lineElement
+                );
+                
+                if (lineIndex !== -1) {
+                    const lineData = this.currentElements.pathLines[lineIndex];
+                    
+                    // Удаляем label линии
+                    if (lineData.labelElement && lineData.labelElement.parentNode) {
+                        lineData.labelElement.remove();
+                    }
+                    
+                    // Удаляем саму линию
+                    if (connection.lineElement.parentNode) {
+                        connection.lineElement.remove();
+                    }
+                    
+                    this.currentElements.pathLines.splice(lineIndex, 1);
+                }
+            }
+        });
+    
+        // Удаляем узел из DOM
+        nodeElement.remove();
+        
+        // Удаляем узел из массива
+        this.currentElements.pathNodes.splice(nodeIndex, 1);
+    
+        // Обновляем ссылки в постах
+        this.currentElements.posts.forEach(post => {
+            if (post.node === node) {
+                post.node = null;
+            }
+        });
+    
+        console.log('Node removal completed. Remaining nodes:', this.currentElements.pathNodes.length);
+        console.log('=== END removePathNode ===');
     }
 
     connectToNode(secondNodeElement) {
@@ -1727,19 +1880,21 @@ class RobotSimulation {
         const line = document.createElement('div');
         line.className = 'path-line';
     
-        const visualLength = Math.sqrt(Math.pow(node2.x - node1.x, 2) + Math.pow(node2.y - node1.y, 2));
-        const angle = Math.atan2(node2.y - node1.y, node2.x - node1.x) * 180 / Math.PI;
+        const dx = node2.x - node1.x;
+        const dy = node2.y - node1.y;
+        const visualLength = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
     
         line.style.width = visualLength + 'px';
         line.style.left = node1.x + 'px';
         line.style.top = node1.y + 'px';
         line.style.transform = `rotate(${angle}deg)`;
+        line.style.transformOrigin = '0 0';
     
-        // ДОБАВЛЯЕМ ОБРАБОТЧИК ДЛЯ УДАЛЕНИЯ ЛИНИЙ
+        // Обработчик для удаления
         line.addEventListener('click', (e) => {
             e.stopPropagation();
             if (this.deleteMode) {
-                console.log('Deleting path line in delete mode');
                 this.removePathLine(line);
             }
         });
@@ -1748,13 +1903,13 @@ class RobotSimulation {
     
         const connectionLength = customLength || (visualLength / this.config.workshop.scale);
     
-        const connectionData = {
+        // Создаем соединения
+        node1.connections.push({
             node: node2,
             lineElement: line,
             length: connectionLength
-        };
+        });
     
-        node1.connections.push(connectionData);
         node2.connections.push({
             node: node1,
             lineElement: line,
@@ -1770,7 +1925,6 @@ class RobotSimulation {
         };
     
         this.currentElements.pathLines.push(lineData);
-    
         this.updateLineLengthDisplay(lineData);
     }
 
@@ -1955,6 +2109,130 @@ class RobotSimulation {
         }, 100);
 
         this.updateStatus('Слои совмещены. Запустите симуляцию для всех роботов одновременно.');
+    }
+
+    recreateAllNodes() {
+        console.log('=== RECREATING ALL NODES ===');
+        
+        const nodesData = [...this.currentElements.pathNodes];
+        
+        // Сохраняем соединения
+        const connections = [];
+        nodesData.forEach(node => {
+            node.connections.forEach(conn => {
+                connections.push({
+                    node1: node,
+                    node2: conn.node,
+                    length: conn.length
+                });
+            });
+        });
+        
+        // Очищаем
+        this.currentElements.pathNodes.forEach(node => {
+            if (node.element && node.element.parentNode) {
+                node.element.remove();
+            }
+        });
+        this.currentElements.pathNodes = [];
+        this.currentElements.pathLines.forEach(line => {
+            if (line.element && line.element.parentNode) {
+                line.element.remove();
+            }
+            if (line.labelElement && line.labelElement.parentNode) {
+                line.labelElement.remove();
+            }
+        });
+        this.currentElements.pathLines = [];
+        
+        // Пересоздаем узлы
+        nodesData.forEach(nodeData => {
+            this.placePathNode(nodeData.x, nodeData.y);
+        });
+        
+        // Восстанавливаем соединения
+        connections.forEach(conn => {
+            const node1 = this.currentElements.pathNodes.find(
+                n => n.x === conn.node1.x && n.y === conn.node1.y
+            );
+            const node2 = this.currentElements.pathNodes.find(
+                n => n.x === conn.node2.x && n.y === conn.node2.y
+            );
+            
+            if (node1 && node2) {
+                this.createConnection(node1, node2, conn.length);
+            }
+        });
+        
+        console.log('Nodes recreated:', this.currentElements.pathNodes.length);
+    }
+
+    debugAllNodes() {
+        console.log('=== DEBUG ALL NODES ===');
+        console.log('Total nodes:', this.currentElements.pathNodes.length);
+        console.log('Delete mode:', this.deleteMode);
+        console.log('Selected tool:', this.selectedTool);
+        
+        this.currentElements.pathNodes.forEach((node, index) => {
+            const element = node.element;
+            console.log(`Node ${index}:`, {
+                x: node.x,
+                y: node.y,
+                isManual: node.isManual || false,
+                connections: node.connections.length,
+                element: element,
+                inDOM: element && element.parentNode ? true : false,
+                className: element.className
+            });
+        });
+        
+        // Проверяем обработчики событий
+        console.log('Checking event listeners...');
+        this.currentElements.pathNodes.forEach((node, index) => {
+            const element = node.element;
+            if (element) {
+                console.log(`Node ${index} event listeners check - element exists`);
+            } else {
+                console.log(`Node ${index} event listeners check - NO ELEMENT`);
+            }
+        });
+        
+        console.log('=== END DEBUG ===');
+    }
+
+    checkAndFixNodes() {
+        console.log('=== CHECKING NODES ===');
+        let fixedCount = 0;
+        
+        this.currentElements.pathNodes.forEach((node, index) => {
+            const element = node.element;
+            if (!element) {
+                console.log(`Node ${index} has no element - removing`);
+                this.currentElements.pathNodes.splice(index, 1);
+                fixedCount++;
+                return;
+            }
+            
+            if (!element.parentNode) {
+                console.log(`Node ${index} element not in DOM - re-adding`);
+                this.workshop.appendChild(element);
+                fixedCount++;
+            }
+            
+            // Проверяем позиционирование
+            const currentLeft = parseFloat(element.style.left);
+            const currentTop = parseFloat(element.style.top);
+            
+            if (currentLeft !== node.x || currentTop !== node.y) {
+                console.log(`Node ${index} position mismatch - fixing`);
+                element.style.left = node.x + 'px';
+                element.style.top = node.y + 'px';
+                fixedCount++;
+            }
+        });
+        
+        console.log(`Fixed ${fixedCount} nodes`);
+        return fixedCount;
     }
 
     copyAllElementsFromAllLayers(originalLayers, targetLayer) {

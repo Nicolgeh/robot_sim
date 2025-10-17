@@ -25,9 +25,8 @@ $config = getConfig();
             <button id="reset-btn">Перезапуск</button>
             <button id="delete-btn">Удалить объекты</button>
             <button id="auto-route-btn">Автомаршрут</button>
-            <button id="debug-btn">Отладка совмещения</button>
-            <button id="debug-nodes-btn">Отладка узлов</button>
-            <button id="debug-positions-btn">Отладка позиций</button>
+            <button id="check-nodes-btn">Проверить узлы</button>
+            <button id="recreate-nodes-btn">Пересоздать узлы</button>
         </div>
 
         <div class="layers-panel">
@@ -183,7 +182,7 @@ $config = getConfig();
     </div>
 
     <script>
-    const config = <?php echo json_encode($config); ?>;
+        const config = <?php echo json_encode($config); ?>;
     </script>
     <script src="js/simulation.js"></script>
 </body>
