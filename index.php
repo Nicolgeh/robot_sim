@@ -14,6 +14,7 @@ $config = getConfig();
 
 <body>
     <div class="container">
+            
         <h1>Симуляция перемещения робота-тележки по цеху</h1>
 
         <div class="controls">
@@ -96,7 +97,6 @@ $config = getConfig();
             <div id="posts-visited">Посещено постов: 0/0</div>
         </div>
     </div>
-
     <!-- Модальное окно для ввода данных поста -->
     <div id="post-modal" class="modal">
         <div class="modal-content">
