@@ -26,11 +26,6 @@ $config = getConfig();
             <button id="reset-btn">Перезапуск</button>
             <button id="delete-btn">Удалить объекты</button>
             <button id="auto-route-btn">Автомаршрут</button>
-            <button id="check-nodes-btn">Проверить узлы</button>
-            <button id="recreate-nodes-btn">Пересоздать узлы</button>
-            <button id="validate-routes-btn">Проверить маршруты</button>
-            <button id="validate-merged-btn">Проверить совмещенный слой</button>
-            <button id="fix-merged-connections-btn">Исправить связи совмещенного слоя</button>
         </div>
 
         <div class="layers-panel">
