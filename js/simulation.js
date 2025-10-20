@@ -1583,35 +1583,34 @@ if (validateMergedBtn) {
         console.log('Path node created successfully at:', x, y);
         return nodeData;
     }
-    updatePathNodesEventHandlers() {
-        console.log('Updating event handlers for all path nodes');
+updatePathNodesEventHandlers() {
+    console.log('Updating event handlers for all path nodes');
 
-        this.currentElements.pathNodes.forEach(nodeData => {
-            const node = nodeData.element;
+    this.currentElements.pathNodes.forEach(nodeData => {
+        const node = nodeData.element;
 
-            // Удаляем старые обработчики
-            node.replaceWith(node.cloneNode(true));
-            const newNode = node.parentNode.lastElementChild;
+        // Удаляем все старые обработчики
+        const newNode = node.cloneNode(true);
+        node.parentNode.replaceChild(newNode, node);
 
-            // Добавляем новые обработчики
-            newNode.addEventListener('click', (e) => {
-                e.stopPropagation();
-                console.log('Path node clicked (updated handler), delete mode:', this.deleteMode);
+        // Добавляем новые обработчики
+        newNode.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log('Path node clicked, delete mode:', this.deleteMode);
 
-                if (this.deleteMode) {
-                    console.log('Deleting path node with updated handler');
-                    this.removePathNode(newNode);
-                } else if (this.selectedTool === 'path') {
-                    this.connectToNode(newNode);
-                }
-            });
-
-            // Обновляем ссылку в данных
-            nodeData.element = newNode;
+            if (this.deleteMode) {
+                this.removePathNode(newNode);
+            } else if (this.selectedTool === 'path') {
+                this.connectToNode(newNode);
+            }
         });
 
-        console.log('Event handlers updated for', this.currentElements.pathNodes.length, 'nodes');
-    }
+        // Обновляем ссылку в данных
+        nodeData.element = newNode;
+    });
+
+    console.log('Event handlers updated for', this.currentElements.pathNodes.length, 'nodes');
+}
 
     openPostModal(defaultNumber = 1, type = 'post') {
         const modal = document.getElementById('post-modal');
@@ -3009,25 +3008,39 @@ if (validateMergedBtn) {
         this.updatePostsVisited();
     }
 
-    findClosestNodeInLayer(element, layer) {
-        const rect = element.getBoundingClientRect();
-        const workshopRect = this.workshop.getBoundingClientRect();
-        const x = rect.left - workshopRect.left + rect.width / 2;
-        const y = rect.top - workshopRect.top + rect.height / 2;
+findClosestNodeInLayer(element, layer) {
+    if (!element) return null;
 
-        let closestNode = null;
-        let minDistance = Infinity;
+    let elementX, elementY;
 
-        layer.elements.pathNodes.forEach(node => {
-            const distance = Math.sqrt(Math.pow(node.x - x, 2) + Math.pow(node.y - y, 2));
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestNode = node;
-            }
-        });
-
-        return closestNode;
+    // Получаем координаты элемента
+    if (element.style && element.style.left && element.style.top) {
+        elementX = parseFloat(element.style.left);
+        elementY = parseFloat(element.style.top);
+    } else if (element.x !== undefined && element.y !== undefined) {
+        elementX = element.x;
+        elementY = element.y;
+    } else {
+        return null;
     }
+
+    let closestNode = null;
+    let minDistance = Infinity;
+    const searchRadius = this.config.workshop.scale * 2;
+
+    layer.elements.pathNodes.forEach(node => {
+        const distance = Math.sqrt(
+            Math.pow(node.x - elementX, 2) + Math.pow(node.y - elementY, 2)
+        );
+
+        if (distance < minDistance && distance < searchRadius) {
+            minDistance = distance;
+            closestNode = node;
+        }
+    });
+
+    return closestNode;
+}
 
     async visitNextPost() {
         const simulation = this.currentSimulation;
@@ -3201,84 +3214,106 @@ if (validateMergedBtn) {
         });
     }
 
-    createIndependentSimulationData(robotData) {
-        console.log('Creating independent simulation data for robot:', robotData.layerIndex);
-        console.log('All posts in current merged layer:', this.currentElements.posts.length);
-        console.log('Robot layerIndex:', robotData.layerIndex);
+createIndependentSimulationData(robotData) {
+    console.log('Creating independent simulation data for robot:', robotData.layerIndex);
+    console.log('All posts in current merged layer:', this.currentElements.posts.length);
     
-        // Находим склад для этого робота в СОВМЕЩЕННОМ слое
-        const warehouse = this.currentElements.mergedWarehouses.find(w => w.layerIndex === robotData.layerIndex);
-        if (!warehouse) {
-            console.log('No warehouse found for robot:', robotData.layerIndex);
-            return null;
+    // Фильтруем посты по layerIndex робота
+    const layerPosts = this.currentElements.posts.filter(post => {
+        const matches = post.layerIndex === robotData.layerIndex;
+        if (matches) {
+            console.log('Found post for robot', robotData.layerIndex, ':', post.conveyor, post.number, 'at layer', post.layerIndex);
         }
+        return matches;
+    });
     
-        // Используем узел склада из совмещенного слоя
-        let warehouseNode = warehouse.node;
-        if (!warehouseNode) {
-            warehouseNode = this.findMergedNode(warehouse.element, robotData.layerIndex, this.currentLayer);
-            if (warehouseNode) {
-                warehouse.node = warehouseNode;
-            }
+    console.log('Found posts for robot', robotData.layerIndex, 'in merged layer:', layerPosts.length);
+
+    if (layerPosts.length === 0) {
+        console.log('No posts found for robot:', robotData.layerIndex);
+        // Попробуем найти посты по координатам
+        const detectedPosts = this.findPostsByProximity(robotData);
+        if (detectedPosts.length > 0) {
+            console.log('Found posts by proximity for robot', robotData.layerIndex, ':', detectedPosts.length);
+            return this.createSimulationDataFromPosts(robotData, detectedPosts);
         }
-    
-        if (!warehouseNode) {
-            console.log('No warehouse node found for robot:', robotData.layerIndex);
-            return null;
-        }
-    
-        // Находим посты для этого слоя в СОВМЕЩЕННОМ слое
-        const layerPosts = this.currentElements.posts.filter(post => 
-            post.layerIndex === robotData.layerIndex
-        );
-    
-        console.log('Found posts for robot', robotData.layerIndex, 'in merged layer:', layerPosts.length);
-    
-        // Убедимся, что у постов есть узлы
-        const postsWithNodes = [];
-        layerPosts.forEach(post => {
-            if (!post.node) {
-                post.node = this.findMergedNode(post.element, post.layerIndex, this.currentLayer);
-            }
-            if (post.node) {
-                postsWithNodes.push(post);
-            } else {
-                console.log('Could not find node for post in merged layer:', post.conveyor, post.number, 'layer:', robotData.layerIndex);
-            }
-        });
-    
-        if (postsWithNodes.length === 0) {
-            console.log('No posts with nodes found for robot:', robotData.layerIndex);
-            return null;
-        }
-    
-        // Сортируем посты
-        const sortedPosts = [...postsWithNodes].sort((a, b) => {
-            if (a.conveyor !== b.conveyor) return a.conveyor - b.conveyor;
-            return a.number - b.number;
-        });
-    
-        console.log(`Created simulation data for robot ${robotData.layerIndex} with ${sortedPosts.length} posts`);
-    
-        // Узел робота - используем узел из совмещенного слоя
-        const robotNode = robotData.node;
-        if (!robotNode) {
-            console.log('No robot node found, using warehouse node as start');
-        }
-    
-        return {
-            robotNode: robotNode || warehouseNode, // Робот стартует со склада или своей позиции
-            warehouseNode: warehouseNode,
-            posts: sortedPosts,
-            currentPostIndex: 0,
-            currentPath: [],
-            isMoving: false,
-            layerIndex: robotData.layerIndex,
-            speed: robotData.speed || 0.6,
-            postStopTime: robotData.postStopTime || 30,
-            warehouseStopTime: robotData.warehouseStopTime || 300
-        };
+        return null;
     }
+
+    return this.createSimulationDataFromPosts(robotData, layerPosts);
+}
+
+createSimulationDataFromPosts(robotData, posts) {
+    // Находим склад для этого робота
+    const warehouse = this.currentElements.mergedWarehouses.find(w => w.layerIndex === robotData.layerIndex);
+    if (!warehouse) {
+        console.log('No warehouse found for robot:', robotData.layerIndex);
+        return null;
+    }
+
+    let warehouseNode = warehouse.node;
+    if (!warehouseNode) {
+        warehouseNode = this.findMergedNode(warehouse.element, robotData.layerIndex, this.currentLayer);
+        if (warehouseNode) {
+            warehouse.node = warehouseNode;
+        }
+    }
+
+    if (!warehouseNode) {
+        console.log('No warehouse node found for robot:', robotData.layerIndex);
+        return null;
+    }
+
+    // Убедимся, что у постов есть узлы
+    const postsWithNodes = [];
+    posts.forEach(post => {
+        if (!post.node) {
+            post.node = this.findMergedNode(post.element, post.layerIndex, this.currentLayer);
+        }
+        if (post.node) {
+            postsWithNodes.push(post);
+        } else {
+            console.log('Could not find node for post in merged layer:', post.conveyor, post.number, 'layer:', robotData.layerIndex);
+        }
+    });
+
+    if (postsWithNodes.length === 0) {
+        console.log('No posts with nodes found for robot:', robotData.layerIndex);
+        return null;
+    }
+
+    // Сортируем посты
+    const sortedPosts = [...postsWithNodes].sort((a, b) => {
+        if (a.conveyor !== b.conveyor) return a.conveyor - b.conveyor;
+        return a.number - b.number;
+    });
+
+    console.log(`Created simulation data for robot ${robotData.layerIndex} with ${sortedPosts.length} posts`);
+
+    return {
+        robotNode: robotData.node || warehouseNode,
+        warehouseNode: warehouseNode,
+        posts: sortedPosts,
+        currentPostIndex: 0,
+        currentPath: [],
+        isMoving: false,
+        layerIndex: robotData.layerIndex,
+        speed: robotData.speed || 0.6,
+        postStopTime: robotData.postStopTime || 30,
+        warehouseStopTime: robotData.warehouseStopTime || 300
+    };
+}
+
+findPostsByProximity(robotData) {
+    const robotX = parseFloat(robotData.element.style.left);
+    const robotY = parseFloat(robotData.element.style.top);
+    const proximityThreshold = this.config.workshop.scale * 3; // 3 метра
+    
+    return this.currentElements.posts.filter(post => {
+        const distance = Math.sqrt(Math.pow(post.x - robotX, 2) + Math.pow(post.y - robotY, 2));
+        return distance < proximityThreshold;
+    });
+}
     async runIndependentRobotSimulation(robotData) {
         // Инициализируем статистику для робота
         const robotId = `robot-${robotData.layerIndex}`;
@@ -4334,114 +4369,109 @@ if (validateMergedBtn) {
         this.currentLayerId = previousLayerId;
     }
 
-    restoreConnectionsForMergedLayer() {
-        console.log('=== RESTORING CONNECTIONS FOR MERGED LAYER ===');
-        
-        // Восстанавливаем связи постов с узлами
-        this.currentElements.posts.forEach(post => {
-            if (!post.node) {
-                const postNode = this.findMergedNode(post.element, post.layerIndex, this.currentLayer);
+restoreConnectionsForMergedLayer() {
+    console.log('=== RESTORING CONNECTIONS FOR MERGED LAYER ===');
+    
+    // Восстанавливаем связи постов с узлами
+    this.currentElements.posts.forEach(post => {
+        if (!post.node) {
+            // Используем сохраненный layerIndex или пытаемся определить
+            const layerIndex = post.layerIndex !== undefined ? post.layerIndex : this.detectLayerIndexForElement(post.x, post.y);
+            
+            if (layerIndex !== null && layerIndex !== undefined) {
+                const postNode = this.findMergedNode(post.element, layerIndex, this.currentLayer);
                 if (postNode) {
                     post.node = postNode;
-                    console.log('Restored connection for merged post at', post.x, post.y, 'to node at', postNode.x, postNode.y);
+                    post.layerIndex = layerIndex; // Сохраняем layerIndex
+                    console.log('Restored connection for merged post at', post.x, post.y, 'to node at', postNode.x, postNode.y, 'layer:', layerIndex);
                 } else {
-                    // Создаем новый узел, если не нашли существующий
-                    console.log('Creating new node for post at', post.x, post.y);
+                    // Создаем новый узел с правильным layerIndex
+                    console.log('Creating new node for post at', post.x, post.y, 'with layerIndex:', layerIndex);
                     const newNode = this.placePathNode(post.x, post.y);
-                    newNode.layerIndex = post.layerIndex;
+                    newNode.layerIndex = layerIndex;
                     post.node = newNode;
-                    console.log('Created new node for post at', post.x, post.y);
+                    post.layerIndex = layerIndex;
                 }
+            } else {
+                console.error('Cannot determine layerIndex for post at', post.x, post.y);
+            }
+        } else if (post.node && post.layerIndex === undefined) {
+            // Если узел есть, но нет layerIndex, устанавливаем его из узла
+            post.layerIndex = post.node.layerIndex;
+        }
+    });
+
+    // Восстанавливаем связи роботов с узлами
+    if (this.currentElements.mergedRobots) {
+        this.currentElements.mergedRobots.forEach(robot => {
+            if (!robot.node) {
+                const robotX = parseFloat(robot.element.style.left);
+                const robotY = parseFloat(robot.element.style.top);
+                const newNode = this.placePathNode(robotX, robotY);
+                newNode.layerIndex = robot.layerIndex;
+                robot.node = newNode;
+                console.log('Created new node for merged robot at', robotX, robotY, 'layer:', robot.layerIndex);
             }
         });
-    
-        // Восстанавливаем связи роботов с узлами
-        if (this.currentElements.mergedRobots) {
-            this.currentElements.mergedRobots.forEach(robot => {
-                if (!robot.node) {
-                    const robotNode = this.findMergedNode(robot.element, robot.layerIndex, this.currentLayer);
-                    if (robotNode) {
-                        robot.node = robotNode;
-                        console.log('Restored connection for merged robot to node at', robotNode.x, robotNode.y);
-                    } else {
-                        // Создаем новый узел для робота
-                        const robotX = parseFloat(robot.element.style.left);
-                        const robotY = parseFloat(robot.element.style.top);
-                        const newNode = this.placePathNode(robotX, robotY);
-                        newNode.layerIndex = robot.layerIndex;
-                        robot.node = newNode;
-                        console.log('Created new node for merged robot at', robotX, robotY);
-                    }
-                }
-            });
-        }
-    
-        // Восстанавливаем связи складов с узлами
-        if (this.currentElements.mergedWarehouses) {
-            this.currentElements.mergedWarehouses.forEach(warehouse => {
-                if (!warehouse.node) {
-                    const warehouseNode = this.findMergedNode(warehouse.element, warehouse.layerIndex, this.currentLayer);
-                    if (warehouseNode) {
-                        warehouse.node = warehouseNode;
-                        console.log('Restored connection for merged warehouse to node at', warehouseNode.x, warehouseNode.y);
-                    } else {
-                        // Создаем новый узел для склада
-                        const newNode = this.placePathNode(warehouse.x, warehouse.y);
-                        newNode.layerIndex = warehouse.layerIndex;
-                        warehouse.node = newNode;
-                        console.log('Created new node for merged warehouse at', warehouse.x, warehouse.y);
-                    }
-                }
-            });
-        }
-    
-        console.log('Merged layer connections restoration completed');
     }
 
-    restoreConnectionsAfterLoad() {
-        console.log('=== RESTORING CONNECTIONS AFTER LOAD ===');
+    // Восстанавливаем связи складов с узлами
+    if (this.currentElements.mergedWarehouses) {
+        this.currentElements.mergedWarehouses.forEach(warehouse => {
+            if (!warehouse.node) {
+                const newNode = this.placePathNode(warehouse.x, warehouse.y);
+                newNode.layerIndex = warehouse.layerIndex;
+                warehouse.node = newNode;
+                console.log('Created new node for merged warehouse at', warehouse.x, warehouse.y, 'layer:', warehouse.layerIndex);
+            }
+        });
+    }
+
+    console.log('Merged layer connections restoration completed');
+}
+
+restoreConnectionsAfterLoad() {
+    console.log('=== RESTORING CONNECTIONS AFTER LOAD ===');
+    
+    // Восстанавливаем связи для всех слоев
+    Object.values(this.layers).forEach(layer => {
+        const elements = layer.elements;
         
         // Восстанавливаем связи постов с узлами
-        this.currentElements.posts.forEach(post => {
+        elements.posts.forEach(post => {
             if (!post.node) {
-                const closestNode = this.findClosestNode(post.element);
+                const closestNode = this.findClosestNodeInLayer(post.element, layer);
                 if (closestNode) {
                     post.node = closestNode;
                     console.log('Restored connection for post at', post.x, post.y, 'to node at', closestNode.x, closestNode.y);
                 }
             }
         });
-    
+
         // Восстанавливаем связи робота и склада с узлами
-        if (this.currentElements.robot && !this.currentElements.robot.node) {
-            this.currentElements.robot.node = this.findClosestNode(this.currentElements.robot);
-            if (this.currentElements.robot.node) {
-                console.log('Restored connection for robot to node at', this.currentElements.robot.node.x, this.currentElements.robot.node.y);
-            }
+        if (elements.robot && !elements.robot.node) {
+            elements.robot.node = this.findClosestNodeInLayer(elements.robot, layer);
         }
-    
-        if (this.currentElements.warehouse && !this.currentElements.warehouse.node) {
-            this.currentElements.warehouse.node = this.findClosestNode(this.currentElements.warehouse);
-            if (this.currentElements.warehouse.node) {
-                console.log('Restored connection for warehouse to node at', this.currentElements.warehouse.node.x, this.currentElements.warehouse.node.y);
-            }
+
+        if (elements.warehouse && !elements.warehouse.node) {
+            elements.warehouse.node = this.findClosestNodeInLayer(elements.warehouse, layer);
         }
-    
-        // ДОБАВЛЯЕМ ВОССТАНОВЛЕНИЕ ДЛЯ СОВМЕЩЕННОГО СЛОЯ
-        if (this.currentLayerId.startsWith('merged-')) {
+
+        // Для совмещенного слоя
+        if (layer.id.startsWith('merged-')) {
             this.restoreConnectionsForMergedLayer();
         }
-    
-        // Генерируем маршруты для всех слоев
-        Object.values(this.layers).forEach(layer => {
-            if (!layer.id.startsWith('merged-')) {
-                this.generateAutoRouteForLayer(layer);
-            }
-        });
-    
-        console.log('Connections restoration completed');
-    }
+    });
 
+    // Генерируем маршруты для всех слоев
+    Object.values(this.layers).forEach(layer => {
+        if (!layer.id.startsWith('merged-')) {
+            this.generateAutoRouteForLayer(layer);
+        }
+    });
+
+    console.log('Connections restoration completed');
+}
     restoreMergedRobot(robotData) {
         console.log('Restoring merged robot:', robotData);
 
@@ -4566,68 +4596,81 @@ if (validateMergedBtn) {
         console.log('Merged warehouse restored successfully');
     }
 
-    restorePost(postData) {
-        const post = document.createElement('div');
-        post.className = 'element post';
-        post.style.left = postData.x + 'px';
-        post.style.top = postData.y + 'px';
+restorePost(postData) {
+    const post = document.createElement('div');
+    post.className = 'element post';
+    post.style.left = postData.x + 'px';
+    post.style.top = postData.y + 'px';
+
+    const postImage = postData.type === 'uis'
+        ? this.config.images.uis
+        : this.config.images.post;
+
+    post.innerHTML = `<img src="${postImage}" alt="${postData.type === 'uis' ? 'УИС' : 'Пост'}" style="width:100%;height:100%;">`;
+    post.dataset.postType = postData.type;
+
+    this.workshop.appendChild(post);
+
+    const info = document.createElement('div');
+    info.className = 'post-info';
+    info.style.left = (postData.x + 20) + 'px';
+    info.style.top = (postData.y - 15) + 'px';
     
-        const postImage = postData.type === 'uis'
-            ? this.config.images.uis
-            : this.config.images.post;
-    
-        post.innerHTML = `<img src="${postImage}" alt="${postData.type === 'uis' ? 'УИС' : 'Пост'}" style="width:100%;height:100%;">`;
-        post.dataset.postType = postData.type;
-    
-        this.workshop.appendChild(post);
-    
-        const info = document.createElement('div');
-        info.className = 'post-info';
-        info.style.left = (postData.x + 20) + 'px';
-        info.style.top = (postData.y - 15) + 'px';
-        
-        if (postData.type === 'uis') {
-            info.textContent = `УИС${postData.number}`;
-        } else {
-            info.textContent = `${postData.conveyor}-${postData.number}`;
-        }
-    
-        this.workshop.appendChild(info);
-    
-        const postObj = {
-            element: post,
-            infoElement: info,
-            x: postData.x,
-            y: postData.y,
-            type: postData.type,
-            conveyor: postData.conveyor,
-            number: postData.number,
-            visited: postData.visited || false,
-            layerIndex: postData.layerIndex // сохраняем layerIndex
-        };
-    
-        this.currentElements.posts.push(postObj);
-    
-        // ДЛЯ СОВМЕЩЕННОГО СЛОЯ ИЩЕМ УЗЕЛ ЧЕРЕЗ findMergedNode
-        if (this.currentLayerId.startsWith('merged-')) {
+    if (postData.type === 'uis') {
+        info.textContent = `УИС${postData.number}`;
+    } else {
+        info.textContent = `${postData.conveyor}-${postData.number}`;
+    }
+
+    this.workshop.appendChild(info);
+
+    const postObj = {
+        element: post,
+        infoElement: info,
+        x: postData.x,
+        y: postData.y,
+        type: postData.type,
+        conveyor: postData.conveyor,
+        number: postData.number,
+        visited: postData.visited || false,
+        layerIndex: postData.layerIndex // ВОССТАНАВЛИВАЕМ layerIndex из данных
+    };
+
+    this.currentElements.posts.push(postObj);
+
+    // ДЛЯ СОВМЕЩЕННОГО СЛОЯ - ИСПОЛЬЗУЕМ ВОССТАНОВЛЕННЫЙ layerIndex
+    if (this.currentLayerId.startsWith('merged-')) {
+        if (postData.layerIndex !== undefined) {
             const postNode = this.findMergedNode(post, postData.layerIndex, this.currentLayer);
             if (postNode) {
                 postObj.node = postNode;
                 console.log('Restored node for merged post:', postData.conveyor, postData.number, 'layer:', postData.layerIndex);
             } else {
                 console.warn('Could not find node for merged post:', postData.conveyor, postData.number, 'layer:', postData.layerIndex);
-                // Создаем новый узел, если не нашли существующий
+                // Создаем новый узел с правильным layerIndex
                 const newNode = this.placePathNode(postData.x, postData.y);
                 newNode.layerIndex = postData.layerIndex;
                 postObj.node = newNode;
-                console.log('Created new node for post:', postData.conveyor, postData.number);
+                console.log('Created new node for post:', postData.conveyor, postData.number, 'with layerIndex:', postData.layerIndex);
             }
         } else {
-            // Для обычного слоя создаем узел
-            const postNode = this.placePathNode(postData.x, postData.y);
-            postObj.node = postNode;
+            console.error('Missing layerIndex for merged post:', postData);
+            // Пытаемся определить layerIndex по координатам
+            const detectedLayerIndex = this.detectLayerIndexForElement(postData.x, postData.y);
+            if (detectedLayerIndex !== null) {
+                postObj.layerIndex = detectedLayerIndex;
+                const newNode = this.placePathNode(postData.x, postData.y);
+                newNode.layerIndex = detectedLayerIndex;
+                postObj.node = newNode;
+                console.log('Detected layerIndex', detectedLayerIndex, 'for post at', postData.x, postData.y);
+            }
         }
+    } else {
+        // Для обычного слоя создаем узел
+        const postNode = this.placePathNode(postData.x, postData.y);
+        postObj.node = postNode;
     }
+}
 
     restorePathNode(nodeData) {
         // Проверяем, существует ли уже узел в этой позиции
@@ -4666,6 +4709,40 @@ if (validateMergedBtn) {
         this.currentElements.pathNodes.push(nodeObj);
         return nodeObj;
     }
+    detectLayerIndexForElement(x, y) {
+    // Определяем layerIndex по смещению координат
+    // В совмещенном слое элементы смещены на layerIndex пикселей
+    const offsets = [0, 1, 2, 3, 4, 5]; // Возможные смещения
+    
+    for (const offset of offsets) {
+        const originalX = x - offset;
+        const originalY = y - offset;
+        
+        // Проверяем, есть ли элементы в исходных слоях с такими координатами
+        const originalLayers = Object.values(this.layers).filter(layer => !layer.id.startsWith('merged-'));
+        
+        for (const layer of originalLayers) {
+            const hasMatchingElement = layer.elements.posts.some(post => 
+                Math.abs(post.x - originalX) < 5 && Math.abs(post.y - originalY) < 5
+            ) || (layer.elements.robot && 
+                Math.abs(parseFloat(layer.elements.robot.style.left) - originalX) < 5 && 
+                Math.abs(parseFloat(layer.elements.robot.style.top) - originalY) < 5
+            ) || (layer.elements.warehouse && 
+                Math.abs(parseFloat(layer.elements.warehouse.style.left) - originalX) < 5 && 
+                Math.abs(parseFloat(layer.elements.warehouse.style.top) - originalY) < 5
+            );
+            
+            if (hasMatchingElement) {
+                const layerIndex = parseInt(layer.id.split('-')[1]) || 0;
+                console.log('Detected layerIndex', layerIndex, 'for element at', x, y, 'original coords:', originalX, originalY);
+                return layerIndex;
+            }
+        }
+    }
+    
+    console.warn('Could not detect layerIndex for element at', x, y);
+    return null;
+}
 restoreConveyors(conveyorsData) {
     // Группируем конвейеры по systemId
     const systems = {};
@@ -4688,6 +4765,32 @@ restoreConveyors(conveyorsData) {
             console.log('Restored conveyor system:', systemId, 'with', segments.length, 'segments');
         }
     });
+}
+
+debugMergedStructure() {
+    console.log('=== DEBUG MERGED STRUCTURE ===');
+    console.log('Current layer:', this.currentLayerId);
+    
+    if (this.currentElements.mergedRobots) {
+        console.log('Merged robots:');
+        this.currentElements.mergedRobots.forEach((robot, index) => {
+            console.log(`  Robot ${index}: layerIndex=${robot.layerIndex}, hasNode=${!!robot.node}`);
+        });
+    }
+    
+    if (this.currentElements.mergedWarehouses) {
+        console.log('Merged warehouses:');
+        this.currentElements.mergedWarehouses.forEach((warehouse, index) => {
+            console.log(`  Warehouse ${index}: layerIndex=${warehouse.layerIndex}, hasNode=${!!warehouse.node}`);
+        });
+    }
+    
+    console.log('Posts:');
+    this.currentElements.posts.forEach((post, index) => {
+        console.log(`  Post ${index}: conveyor=${post.conveyor}, number=${post.number}, layerIndex=${post.layerIndex}, hasNode=${!!post.node}`);
+    });
+    
+    console.log('=== END DEBUG ===');
 }
     restorePathLine(lineData) {
         // Находим начальный и конечный узлы
